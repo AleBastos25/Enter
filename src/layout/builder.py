@@ -353,7 +353,8 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
     )
 
     # Attach neighborhood as extra attribute (temporary hack, not in model yet)
-    setattr(layout_graph, "neighborhood", neighborhood)
+    # Use object.__setattr__ to bypass frozen dataclass restriction
+    object.__setattr__(layout_graph, "neighborhood", neighborhood)
 
     return layout_graph
 

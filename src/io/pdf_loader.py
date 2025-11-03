@@ -5,102 +5,165 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple, List, Dict, Any
 
 import fitz  # PyMuPDF
 
 from ..core.models import Block, Document, InlineSpan
 
-
 __all__ = ["load_document", "extract_blocks"]
+
+# Heuristic: if horizontal gap (in points) between spans is larger than this
+# factor * reference_font_size, we will inject a space when concatenating spans.
+_GAP_FACTOR_CHARS = 0.33
+
+# Minimal bbox width/height (normalized) to avoid zero-size boxes after clamping.
+_MIN_NORM_EXTENT = 0.001
 
 
 def _normalize_bbox(
-    bbox: tuple[float, float, float, float], width: float, height: float
-) -> tuple[float, float, float, float]:
-    """Normalize bbox coordinates to [0, 1] range.
+    bbox: Tuple[float, float, float, float], width: float, height: float
+) -> Tuple[float, float, float, float]:
+    """Normalize bbox coordinates to [0, 1] range and ensure x0<x1, y0<y1.
 
     Args:
         bbox: Raw bbox (x0, y0, x1, y1) in page coordinates.
         width: Page width in points.
         height: Page height in points.
-
-    Returns:
-        Normalized bbox (x0, y0, x1, y1) clamped to [0, 1] with x0 < x1, y0 < y1.
     """
     x0, y0, x1, y1 = bbox
-    # Normalize
-    x0_norm = max(0.0, min(1.0, x0 / width))
-    y0_norm = max(0.0, min(1.0, y0 / height))
-    x1_norm = max(0.0, min(1.0, x1 / width))
-    y1_norm = max(0.0, min(1.0, y1 / height))
-    # Ensure x0 < x1 and y0 < y1
-    if x0_norm >= x1_norm:
-        x1_norm = min(1.0, x0_norm + 0.001)
-    if y0_norm >= y1_norm:
-        y1_norm = min(1.0, y0_norm + 0.001)
-    return (x0_norm, y0_norm, x1_norm, y1_norm)
+    x0_n = max(0.0, min(1.0, x0 / width))
+    y0_n = max(0.0, min(1.0, y0 / height))
+    x1_n = max(0.0, min(1.0, x1 / width))
+    y1_n = max(0.0, min(1.0, y1 / height))
+    # Ensure positive extents
+    if x0_n >= x1_n:
+        x1_n = min(1.0, x0_n + _MIN_NORM_EXTENT)
+    if y0_n >= y1_n:
+        y1_n = min(1.0, y0_n + _MIN_NORM_EXTENT)
+    return (x0_n, y0_n, x1_n, y1_n)
 
 
-def _clean_text(s: str) -> str:
-    """Clean text: collapse whitespace, strip, remove zero-width chars.
+_ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\ufeff]")
+_WS_RE = re.compile(r"[ \t\r\f]+")
 
-    Args:
-        s: Raw text string.
 
-    Returns:
-        Cleaned text string.
+def _clean_text(s: str, *, preserve_newlines: bool = True) -> str:
+    """Clean text: remove zero-width chars, collapse spaces, keep optional newlines.
+
+    If ``preserve_newlines=True``, newlines are kept and spaces are collapsed per line.
     """
-    # Remove zero-width characters
-    s = re.sub(r"[\u200b-\u200d\ufeff]", "", s)
-    # Collapse runs of whitespace to single space
-    s = re.sub(r"\s+", " ", s)
-    # Strip leading/trailing whitespace
-    return s.strip()
+    s = _ZERO_WIDTH_RE.sub("", s)
+    if preserve_newlines:
+        # Normalize spaces around newlines while preserving line breaks
+        lines = [ln.strip() for ln in s.splitlines()]
+        lines = [
+            _WS_RE.sub(" ", ln) for ln in lines if ln != ""
+        ]  # collapse spaces but keep empties out
+        return "\n".join(lines).strip()
+    else:
+        s = _WS_RE.sub(" ", s)
+        return s.strip()
 
 
-def _is_bold(font_name: str, flags: Optional[int] = None) -> bool:
-    """Check if font indicates bold styling.
+def _is_bold(font_name: str | None, flags: Optional[int] = None) -> bool:
+    """Heuristic bold detection using font name and flags.
 
-    Args:
-        font_name: Font name string.
-        flags: Optional font flags from PyMuPDF.
-
-    Returns:
-        True if font name suggests bold or flags indicate bold.
+    - Font names containing: bold, semibold, demi, black, heavy
+    - PyMuPDF flags bit 4 (16) indicates bold in many cases
     """
     if font_name:
-        font_lower = font_name.lower()
-        if any(keyword in font_lower for keyword in ["bold", "black", "semi", "semibold"]):
+        f = font_name.lower()
+        if any(k in f for k in ("bold", "semibold", "semi", "demi", "black", "heavy")):
             return True
-    # Check flags if available (bit 4 indicates bold in PyMuPDF)
-    if flags is not None:
-        if flags & 16:  # Bit 4 (0-indexed) is bold
-            return True
+    if flags is not None and (flags & 16):
+        return True
     return False
 
 
-def _spans_from_line(line_dict: dict) -> list[InlineSpan]:
-    """Convert PyMuPDF line span entries to InlineSpan objects.
+def _span_info(span_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract minimal info from a PyMuPDF span dict (kept local, not in models)."""
+    text = span_dict.get("text", "") or ""
+    bbox = span_dict.get("bbox")  # (x0, y0, x1, y1) in page coords
+    size = span_dict.get("size")
+    flags = span_dict.get("flags")
+    font = span_dict.get("font")
+    return {
+        "text": text,
+        "bbox": bbox,
+        "size": size,
+        "bold": _is_bold(font, flags),
+        "font": font,
+        "flags": flags,
+    }
 
-    Args:
-        line_dict: PyMuPDF line dictionary with 'spans' key.
 
-    Returns:
-        List of InlineSpan objects.
+def _concat_line_spans(span_infos: List[Dict[str, Any]]) -> tuple[str, List[InlineSpan]]:
+    """Concatenate spans into a single line string using spacing heuristics.
+
+    Rules:
+      - Insert a space if both previous last char and current first char are alnum.
+      - Also insert a space if horizontal gap > _GAP_FACTOR_CHARS * ref_font_size.
+      - Otherwise, concatenate directly.
+    Returns the concatenated line string and a list of InlineSpan (without bbox).
     """
-    spans = []
-    for span_dict in line_dict.get("spans", []):
-        text = span_dict.get("text", "")
-        if not text:
+    if not span_infos:
+        return "", []
+
+    line_text_parts: List[str] = []
+    inline_spans: List[InlineSpan] = []
+
+    def first_char(s: str) -> str:
+        return next((c for c in s if not c.isspace()), "")
+
+    def last_char(s: str) -> str:
+        for c in reversed(s):
+            if not c.isspace():
+                return c
+        return ""
+
+    prev_text = ""
+    prev_x1: Optional[float] = None
+    prev_size: Optional[float] = None
+
+    for si in span_infos:
+        t = si["text"]
+        if not t:
             continue
-        font_name = span_dict.get("font", "")
-        flags = span_dict.get("flags", None)
-        font_size = span_dict.get("size", None)
-        bold = _is_bold(font_name, flags)
-        spans.append(InlineSpan(text=text, bold=bold, font_size=font_size))
-    return spans
+        # Prepare spacing decision
+        add_space = False
+        fc = first_char(t)
+        lc_prev = last_char(prev_text)
+        if prev_text:
+            if lc_prev.isalnum() and fc.isalnum():
+                add_space = True
+            # Gap-based spacing (if bbox available for both)
+            x0, x1 = None, None
+            if si.get("bbox") is not None and prev_x1 is not None:
+                x0 = si["bbox"][0]
+                gap = x0 - prev_x1
+                ref_size = prev_size or si.get("size") or 10.0
+                if gap > (_GAP_FACTOR_CHARS * ref_size):
+                    add_space = True
+        # Append with optional space
+        if add_space:
+            line_text_parts.append(" ")
+        line_text_parts.append(t)
+
+        # Track for next iteration
+        prev_text = t
+        if si.get("bbox") is not None:
+            prev_x1 = si["bbox"][2]
+        prev_size = si.get("size") or prev_size
+
+        # Collect InlineSpan (for bold/font_size aggregation)
+        inline_spans.append(
+            InlineSpan(text=t, bold=bool(si.get("bold")), font_size=si.get("size"))
+        )
+
+    return "".join(line_text_parts), inline_spans
 
 
 def load_document(
@@ -108,18 +171,8 @@ def load_document(
 ) -> Document:
     """Create a Document instance from a PDF file path.
 
-    Args:
-        pdf_path: Path to the PDF file.
-        label: Optional document type label (can be None).
-        doc_id: Optional document ID. If not provided, uses filename without extension
-                or a short hash.
-
-    Returns:
-        Document instance with path set and data=None.
-
-    Raises:
-        FileNotFoundError: If pdf_path does not exist.
-        ValueError: If PDF has more than one page.
+    - Ensures the PDF has exactly one page (MVP0 constraint).
+    - Uses filename stem as doc_id if none is provided.
     """
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -127,13 +180,9 @@ def load_document(
     # Generate doc_id if not provided
     if doc_id is None:
         stem = Path(pdf_path).stem
-        if stem:
-            doc_id = stem
-        else:
-            # Fallback to hash of path
-            doc_id = hashlib.md5(pdf_path.encode()).hexdigest()[:8]
+        doc_id = stem or hashlib.md5(pdf_path.encode()).hexdigest()[:8]
 
-    # Validate one-page constraint
+    # Validate one-page constraint eagerly
     doc = fitz.open(pdf_path)
     try:
         if len(doc) != 1:
@@ -143,28 +192,16 @@ def load_document(
     finally:
         doc.close()
 
-    filename = os.path.basename(pdf_path)
-    meta = {"filename": filename}
-
-    return Document(
-        id=doc_id, label=label or "unknown", path=pdf_path, data=None, meta=meta
-    )
+    meta = {"filename": os.path.basename(pdf_path)}
+    return Document(id=doc_id, label=label or "unknown", path=pdf_path, data=None, meta=meta)
 
 
-def extract_blocks(document: Document) -> list[Block]:
-    """Extract normalized text blocks from a Document.
+def extract_blocks(document: Document) -> List[Block]:
+    """Extract normalized text blocks from a one-page Document.
 
-    Opens the PDF (from document.path or document.data) and returns a sorted list
-    of Block items with normalized geometry.
-
-    Args:
-        document: Document instance with path or data set.
-
-    Returns:
-        Sorted list of Block objects (sorted by y0, then x0).
-
-    Raises:
-        ValueError: If neither path nor data is set, or if PDF has more than one page.
+    - Opens the PDF by path or bytes.
+    - Iterates text blocks, concatenates spans with spacing heuristics, joins lines with "\n".
+    - Returns blocks sorted by (y0, x0) with normalized bbox in [0,1].
     """
     # Open PDF
     if document.path:
@@ -175,40 +212,30 @@ def extract_blocks(document: Document) -> list[Block]:
         raise ValueError("Document must have either path or data set.")
 
     try:
-        # Validate page count
         if len(doc) != 1:
-            raise ValueError(
-                f"Only 1-page PDFs are supported in MVP0. Found {len(doc)} pages."
-            )
+            raise ValueError(f"Only 1-page PDFs are supported in MVP0. Found {len(doc)} pages.")
 
         page = doc[0]
-        width = page.rect.width
-        height = page.rect.height
+        width, height = page.rect.width, page.rect.height
 
-        # Extract text blocks using dict format
         text_dict = page.get_text("dict")
-
-        blocks = []
+        blocks: List[Block] = []
         block_id = 0
 
-        # Iterate through blocks in the page
         for block_dict in text_dict.get("blocks", []):
-            # Skip non-text blocks (images, etc.)
             if block_dict.get("type") != 0:  # 0 = text block
                 continue
 
-            # Collect all lines and spans in this block
-            block_text_parts = []
-            all_spans = []
-            block_bbox = None
+            block_bbox: Optional[Tuple[float, float, float, float]] = None
+            block_line_texts: List[str] = []
+            all_inline_spans: List[InlineSpan] = []
 
             for line_dict in block_dict.get("lines", []):
-                # Get line bbox (use block bbox if available, else line bbox)
-                line_bbox = line_dict.get("bbox", block_dict.get("bbox"))
+                # Update/expand block bbox
+                line_bbox = tuple(line_dict.get("bbox", block_dict.get("bbox")))  # type: ignore
                 if block_bbox is None:
                     block_bbox = line_bbox
                 else:
-                    # Expand block bbox to include line
                     block_bbox = (
                         min(block_bbox[0], line_bbox[0]),
                         min(block_bbox[1], line_bbox[1]),
@@ -216,56 +243,62 @@ def extract_blocks(document: Document) -> list[Block]:
                         max(block_bbox[3], line_bbox[3]),
                     )
 
-                # Extract spans from this line
-                line_spans = _spans_from_line(line_dict)
-                all_spans.extend(line_spans)
+                # Build spans for this line with spacing heuristics
+                span_infos = [_span_info(sd) for sd in line_dict.get("spans", [])]
+                line_text, inline_spans = _concat_line_spans(span_infos)
+                line_text = _clean_text(line_text, preserve_newlines=False)
 
-                # Collect text
-                for span in line_spans:
-                    block_text_parts.append(span.text)
+                # (Optional) simple de-hyphenation across lines: if current line ends with "-",
+                # we will merge with the next line without inserting a space/newline when joining below.
+                block_line_texts.append(line_text)
+                all_inline_spans.extend(inline_spans)
 
-            # Use block bbox if line aggregation didn't work
             if block_bbox is None:
-                block_bbox = block_dict.get("bbox", (0, 0, width, height))
+                # Fallback to the block bbox if lines were empty
+                block_bbox = tuple(block_dict.get("bbox", (0, 0, width, height)))  # type: ignore
 
-            # Clean and assemble text
-            raw_text = "".join(block_text_parts)
-            cleaned_text = _clean_text(raw_text)
+            # Join lines with newlines, but handle hyphen join (end-with-'-')
+            joined_lines: List[str] = []
+            for i, ln in enumerate(block_line_texts):
+                if i > 0 and joined_lines:
+                    prev = joined_lines[-1]
+                    if prev.endswith("-"):
+                        # remove hyphen and concatenate without space
+                        joined_lines[-1] = prev[:-1] + ln.lstrip()
+                    else:
+                        joined_lines.append("\n" + ln)
+                else:
+                    joined_lines.append(ln)
+            raw_text = "".join(joined_lines)
 
-            # Skip empty blocks
+            cleaned_text = _clean_text(raw_text, preserve_newlines=True)
             if not cleaned_text:
                 continue
 
-            # Normalize bbox
             normalized_bbox = _normalize_bbox(block_bbox, width, height)
 
-            # Compute bold (any span is bold)
-            is_bold = any(span.bold for span in all_spans)
-
-            # Compute font size (mean of spans)
-            font_sizes = [span.font_size for span in all_spans if span.font_size is not None]
+            # Bold aggregation & avg font size
+            is_bold = any(sp.bold for sp in all_inline_spans)
+            font_sizes = [sp.font_size for sp in all_inline_spans if sp.font_size is not None]
             avg_font_size = sum(font_sizes) / len(font_sizes) if font_sizes else None
 
-            # Create Block
-            block = Block(
-                id=block_id,
-                text=cleaned_text,
-                bbox=normalized_bbox,
-                page=0,
-                font_size=avg_font_size,
-                bold=is_bold,
-                rotation=0,  # MVP0: assume no rotation
-                spans=all_spans,
+            blocks.append(
+                Block(
+                    id=block_id,
+                    text=cleaned_text,
+                    bbox=normalized_bbox,
+                    page=0,
+                    font_size=avg_font_size,
+                    bold=is_bold,
+                    rotation=0,
+                    spans=all_inline_spans,
+                )
             )
-
-            blocks.append(block)
             block_id += 1
 
-        # Sort blocks: primary by y0 (ascending), secondary by x0 (ascending)
+        # Sort blocks: primary by y0 (asc), secondary by x0 (asc)
         blocks.sort(key=lambda b: (b.bbox[1], b.bbox[0]))
-
         return blocks
 
     finally:
         doc.close()
-

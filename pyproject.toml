@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "document-extractor"
+version = "0.1.0"
+description = "Layout-first, hybrid PDF data extraction pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Enter AI Fellowship Candidate" }
+]
+keywords = ["pdf", "extraction", "ocr", "layout", "documents"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://example.com"
+Repository = "https://example.com/repo"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["document_extractor*", "app*", "core*", "ingestion*", "layout*", "matching*", "extraction*", "llm*", "validation*", "patterns*", "telemetry*", "utils*"]
+exclude = ["tests*"]
+

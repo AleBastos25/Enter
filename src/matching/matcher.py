@@ -150,6 +150,50 @@ def _dedupe_candidates(candidates: list[FieldCandidate]) -> list[FieldCandidate]
     return list(by_node.values())
 
 
+def _load_matching_config() -> dict:
+    """Load matching config from YAML files, with fallback to defaults."""
+    from pathlib import Path
+    import yaml
+
+    # Load from layout.yaml (column/section bonuses)
+    config_path = Path("configs/layout.yaml")
+    defaults = {
+        "prefer_same_column_bonus": 0.08,
+        "prefer_same_section_bonus": 0.05,
+        "cross_column_penalty": 0.06,
+        "cross_section_penalty": 0.04,
+        "relation_weight_same_table_row": 0.85,  # From tables.yaml
+        "prefer_same_row_bonus": 0.12,
+        "prefer_same_col_bonus": 0.06,
+        "cross_row_penalty": 0.06,
+        "cross_col_penalty": 0.04,
+    }
+
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+                matching_cfg = loaded.get("matching", {})
+                if matching_cfg:
+                    defaults.update(matching_cfg)
+        except Exception:
+            pass
+
+    # Also load from tables.yaml (table-specific rankings)
+    tables_config_path = Path("configs/tables.yaml")
+    if tables_config_path.exists():
+        try:
+            with open(tables_config_path, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+                rank_cfg = loaded.get("rank", {})
+                if rank_cfg:
+                    defaults.update(rank_cfg)
+        except Exception:
+            pass
+
+    return defaults
+
+
 def match_fields(
     schema_fields: list[SchemaField],
     layout: LayoutGraph,
@@ -200,8 +244,8 @@ def match_fields(
                     cell_block = block_by_id[cell_block_id]
                     raw_line = _first_line(cell_block.text)
 
-                    # High priority for table candidates
-                    spatial_score = 0.85  # same_table_row
+                    # High priority for table candidates (use config value)
+                    spatial_score = matching_cfg.get("relation_weight_same_table_row", 0.85)
                     type_ok = 1.0
                     if validate:
                         type_ok = 1.0 if validate(field, raw_line) else 0.0

@@ -23,4 +23,5 @@ rank:
   prefer_same_col_bonus: 0.06
   cross_row_penalty: 0.06
   cross_col_penalty: 0.04
+  relation_weight_same_table_row: 0.85  # "força espacial" de same_table_row
 

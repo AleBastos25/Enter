@@ -7,6 +7,7 @@ import unicodedata
 from typing import Callable, Optional
 
 from ..core.models import Block, FieldCandidate, LayoutGraph, SchemaField
+from ..tables.extractor import find_cell_by_label, find_table_for_block
 
 
 def _normalize_text(s: str) -> str:
@@ -182,11 +183,64 @@ def match_fields(
         # 2) Find label blocks
         label_block_ids = _find_label_blocks(layout.blocks, synonyms)
 
+        # Load matching config (needed for both table and neighborhood matching)
+        matching_cfg = _load_matching_config()
+
+        # 2.5) Check tables first (before neighborhood fallback)
+        tables = getattr(layout, "tables", [])
+        if tables and label_block_ids:
+            # Try to find cell by label in tables
+            label_patterns = synonyms + [field.name.lower()]
+            table_cell = find_cell_by_label(tables, label_patterns, search_in="any", return_type="cell")
+
+            if table_cell and table_cell.block_ids:
+                # Use first block from cell as node_id
+                cell_block_id = table_cell.block_ids[0]
+                if cell_block_id in block_by_id:
+                    cell_block = block_by_id[cell_block_id]
+                    raw_line = _first_line(cell_block.text)
+
+                    # High priority for table candidates
+                    spatial_score = 0.85  # same_table_row
+                    type_ok = 1.0
+                    if validate:
+                        type_ok = 1.0 if validate(field, raw_line) else 0.0
+
+                    # Add row/col bonuses if available
+                    table = find_table_for_block(cell_block_id, tables)
+                    if table:
+                        label_table = find_table_for_block(label_block_ids[0], tables)
+                        if label_table and label_table.id == table.id:
+                            # Same table: check if same row/col
+                            label_cell = next(
+                                (c for c in label_table.cells if label_block_ids[0] in c.block_ids), None
+                            )
+                            if label_cell:
+                                if label_cell.row_id == table_cell.row_id:
+                                    spatial_score += matching_cfg.get("prefer_same_row_bonus", 0.12)
+                                else:
+                                    spatial_score -= matching_cfg.get("cross_row_penalty", 0.06)
+
+                                if label_cell.col_id == table_cell.col_id:
+                                    spatial_score += matching_cfg.get("prefer_same_col_bonus", 0.06)
+                                else:
+                                    spatial_score -= matching_cfg.get("cross_col_penalty", 0.04)
+
+                    spatial_score = max(0.0, min(1.0, spatial_score))
+
+                    candidates.append(
+                        FieldCandidate(
+                            field=field,
+                            node_id=cell_block_id,
+                            source_label_block_id=label_block_ids[0],
+                            relation="same_table_row",
+                            scores={"spatial": spatial_score, "type": type_ok},
+                            local_context=raw_line[:120],
+                        )
+                    )
+
         # 3) Generate candidates via neighborhood
         seen_dst_ids = set()  # Avoid duplicates across label blocks
-
-        # Load matching config
-        matching_cfg = _load_matching_config()
 
         # Get column/section metadata
         column_by_block = getattr(layout, "column_id_by_block", {})
@@ -304,11 +358,14 @@ def match_fields(
                     if valid_same_col:
                         candidates = same_col + [c for c in cross_col if c.scores.get("type", 0.0) > 0.8]
 
-        # Sort by total score (descending)
-        candidates.sort(
-            key=lambda c: 0.65 * c.scores.get("type", 0.0) + 0.35 * c.scores.get("spatial", 0.0),
-            reverse=True,
-        )
+        # Sort by priority: table candidates first, then by score
+        def sort_key(c: FieldCandidate) -> tuple[int, float]:
+            # Priority: 0 = table, 1 = same_line, 2 = below
+            priority = 0 if c.relation == "same_table_row" else (1 if c.relation == "same_line_right_of" else 2)
+            score = 0.65 * c.scores.get("type", 0.0) + 0.35 * c.scores.get("spatial", 0.0)
+            return (priority, -score)  # Negative for descending
+
+        candidates.sort(key=sort_key)
         # Take top_k
         results[field.name] = candidates[:top_k]
 

@@ -512,13 +512,66 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
         tables=[],
     )
 
+    # Extract PDF vector lines (optional, for grid table detection)
+    pdf_lines = None
+    if document.path:
+        try:
+            import fitz
+
+            doc = fitz.open(document.path)
+            if len(doc) == 1:
+                page = doc[0]
+                width, height = page.rect.width, page.rect.height
+                pdf_lines = _extract_pdf_lines(page, width, height)
+            doc.close()
+        except Exception:
+            pass
+
     # Attach metadata as extra attributes (temporary hack, not in model yet)
     object.__setattr__(layout_graph, "neighborhood", neighborhood)
     object.__setattr__(layout_graph, "column_id_by_block", column_id_by_block)
     object.__setattr__(layout_graph, "section_id_by_block", section_id_by_block)
     object.__setattr__(layout_graph, "line_id_by_block", line_id_by_block)
+    if pdf_lines:
+        object.__setattr__(layout_graph, "pdf_lines", pdf_lines)
 
     return layout_graph
+
+
+def _extract_pdf_lines(page, width: float, height: float) -> dict[str, list[tuple[float, float, float, float]]]:
+    """Extract horizontal and vertical lines from PDF (normalized coordinates)."""
+    import fitz
+
+    lines_h: list[tuple[float, float, float, float]] = []  # (x0, y, x1, y)
+    lines_v: list[tuple[float, float, float, float]] = []  # (x, y0, x, y1)
+
+    try:
+        drawings = page.get_drawings()
+
+        for path in drawings:
+            for item in path.get("items", []):
+                if item[0] == "l":  # line
+                    x0, y0 = item[1]
+                    x1, y1 = item[2]
+
+                    # Normalize
+                    x0_norm = x0 / width
+                    y0_norm = y0 / height
+                    x1_norm = x1 / width
+                    y1_norm = y1 / height
+
+                    # Check if horizontal or vertical (within tolerance)
+                    tol = 0.01
+                    if abs(y0_norm - y1_norm) < tol:
+                        # Horizontal line
+                        lines_h.append((min(x0_norm, x1_norm), y0_norm, max(x0_norm, x1_norm), y0_norm))
+                    elif abs(x0_norm - x1_norm) < tol:
+                        # Vertical line
+                        lines_v.append((x0_norm, min(y0_norm, y1_norm), x0_norm, max(y0_norm, y1_norm)))
+    except Exception:
+        pass
+
+    return {"h": lines_h, "v": lines_v}
 
 
 def dump_layout_debug(layout: LayoutGraph) -> None:

@@ -8,6 +8,7 @@ from ..extraction.text_extractor import extract_from_candidate
 from ..io.pdf_loader import extract_blocks, load_document
 from ..layout.builder import build_layout
 from ..matching.matcher import match_fields
+from ..tables.detector import detect_tables
 from .models import SchemaField
 from .schema import enrich_schema
 
@@ -76,11 +77,17 @@ class Pipeline:
         # 2) Layout
         layout = build_layout(doc, blocks)
 
+        # 2.5) Detect tables
+        pdf_lines = getattr(layout, "pdf_lines", None)
+        tables = detect_tables(layout, cfg=None, pdf_lines=pdf_lines)
+        # Attach tables to layout (via setattr since it's a frozen dataclass)
+        object.__setattr__(layout, "tables", tables)
+
         # 3) Enrich schema: convert schema_dict -> ExtractionSchema
         enriched = enrich_schema(label, schema_dict)
         schema_fields = enriched.fields
 
-        # 4) Matching (no soft validation needed; hard validators in extraction)
+        # 4) Matching (includes table lookup; no soft validation needed; hard validators in extraction)
         cands_map = match_fields(
             schema_fields, layout, validate=None, top_k=self.policy.top_k
         )
@@ -145,7 +152,8 @@ class Pipeline:
 
                     value = value_candidate
                     confidence = conf_candidate
-                    source = "heuristic"
+                    # Determine source: "table" if from table, else "heuristic"
+                    source = "table" if cand.relation == "same_table_row" else "heuristic"
                     trace = trace_candidate
                     # Mark this block as used
                     used_blocks[cand.node_id] = (field.name, value_candidate)

@@ -136,13 +136,38 @@ class SpatialEdge:
 
 
 @dataclass(frozen=True)
-class TableStructure:
-    """Placeholder table structure for future use (not used in MVP0)."""
+class TableCell:
+    """A cell in a table structure."""
 
-    table_id: int
-    rows: int
-    cols: int
-    cells: Dict[Tuple[int, int], int] = field(default_factory=dict)
+    id: int
+    row_id: int
+    col_id: int
+    bbox: Tuple[float, float, float, float]
+    block_ids: List[int] = field(default_factory=list)  # blocks contained in this cell
+    text: str = ""  # joined text from blocks/lines within
+    header: bool = False
+
+
+@dataclass(frozen=True)
+class TableRow:
+    """A row in a table structure."""
+
+    id: int
+    bbox: Tuple[float, float, float, float]
+    cell_ids: List[int] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TableStructure:
+    """Table structure (KV-list or grid table)."""
+
+    id: int
+    type: Literal["kv", "grid"]
+    bbox: Tuple[float, float, float, float]
+    row_ids: List[int] = field(default_factory=list)
+    col_count: int = 0
+    cells: List[TableCell] = field(default_factory=list)
+    rows: List[TableRow] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -170,7 +195,7 @@ class FieldCandidate:
     field: SchemaField
     node_id: int
     source_label_block_id: int
-    relation: SpatialEdgeType
+    relation: SpatialEdgeType | Literal["same_table_row"]
     scores: Dict[str, float] = field(default_factory=dict)
     local_context: Optional[str] = None
 

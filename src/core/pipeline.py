@@ -8,8 +8,8 @@ from ..extraction.text_extractor import extract_from_candidate
 from ..io.pdf_loader import extract_blocks, load_document
 from ..layout.builder import build_layout
 from ..matching.matcher import match_fields
-from ..validation.validators import validate_soft
 from .models import SchemaField
+from .schema import enrich_schema
 
 
 __all__ = ["PipelinePolicy", "Pipeline"]
@@ -76,12 +76,13 @@ class Pipeline:
         # 2) Layout
         layout = build_layout(doc, blocks)
 
-        # 3) Enrich schema: convert schema_dict -> SchemaField list
-        schema_fields = _enrich_schema(schema_dict)
+        # 3) Enrich schema: convert schema_dict -> ExtractionSchema
+        enriched = enrich_schema(label, schema_dict)
+        schema_fields = enriched.fields
 
-        # 4) Matching
+        # 4) Matching (no soft validation needed; hard validators in extraction)
         cands_map = match_fields(
-            schema_fields, layout, validate=validate_soft, top_k=self.policy.top_k
+            schema_fields, layout, validate=None, top_k=self.policy.top_k
         )
 
         # 5) Extraction loop with reuse prevention
@@ -127,7 +128,13 @@ class Pipeline:
                                 # If not, it's incompatible and we should skip
                                 from ..validation.validators import validate_and_normalize
 
-                                ok_other, _ = validate_and_normalize(used_field_obj.type or "text", value_candidate)
+                                ok_other, _ = validate_and_normalize(
+                                    used_field_obj.type or "text",
+                                    value_candidate,
+                                    enum_options=used_field_obj.meta.get("enum_options")
+                                    if used_field_obj.meta
+                                    else None,
+                                )
                                 if not ok_other:
                                     # This value doesn't work for the other field's type,
                                     # so it might be okay for this field
@@ -158,106 +165,5 @@ class Pipeline:
         }
 
 
-# Type inference triggers (case-insensitive, normalized)
-TYPE_TRIGGERS = {
-    "date": ["data", "date", "emissão", "emissao", "vencimento", "vcto", "venc", "nascimento"],
-    "money": ["valor", "preço", "preco", "total", "montante", "amount", "saldo", "value"],
-    "id_simple": ["id", "código", "codigo", "registro", "inscrição", "inscricao", "nº", "no", "n."],
-    "uf": ["uf", "estado", "seccional", "sigla"],
-    "cep": ["cep", "zip"],
-}
-
-
-def _normalize_for_match(text: str) -> str:
-    """Normalize text for matching (lowercase, remove accents, etc.)."""
-    import unicodedata
-
-    # Remove accents
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return text.lower()
-
-
-def _generate_synonyms(name: str, description: str) -> list[str]:
-    """Generate synonyms from field name and description (generic, not field-specific)."""
-    synonyms = [name.lower()]
-
-    name_norm = _normalize_for_match(name)
-    desc_norm = _normalize_for_match(description)
-
-    # Generic synonym patterns (never depend on specific PDF)
-    # If name contains common patterns, add variants
-    if any(word in name_norm for word in ["inscri", "registro", "id", "nº", "no", "numero"]):
-        synonyms.extend(["inscrição", "inscricao", "inscri", "nº", "no", "n.", "numero", "registro"])
-
-    if any(word in name_norm for word in ["uf", "estado", "seccional", "sigla"]):
-        synonyms.extend(["uf", "estado", "seccional", "sigla"])
-
-    if any(word in name_norm for word in ["nome", "name"]):
-        synonyms.extend(["nome", "name"])
-
-    if any(word in name_norm for word in ["cep", "zip"]):
-        synonyms.extend(["cep", "zip"])
-
-    # Also use description words if they match common patterns
-    desc_words = desc_norm.split()
-    for word in desc_words:
-        if word in ["inscri", "registro", "id", "nº", "no", "numero"] and word not in synonyms:
-            synonyms.append(word)
-        if word in ["uf", "estado", "seccional", "sigla"] and word not in synonyms:
-            synonyms.append(word)
-        if word in ["cep", "zip"] and word not in synonyms:
-            synonyms.append(word)
-
-    # Remove duplicates while preserving order
-    seen = set()
-    unique = []
-    for syn in synonyms:
-        syn_norm = syn.lower().strip()
-        if syn_norm and syn_norm not in seen:
-            seen.add(syn_norm)
-            unique.append(syn_norm)
-
-    return unique
-
-
-def _enrich_schema(schema_dict: Dict[str, str]) -> list[SchemaField]:
-    """Convert schema_dict to SchemaField list with heuristic types and synonyms.
-
-    Uses generic triggers and patterns, not hardcoded to specific field names.
-
-    Args:
-        schema_dict: Mapping field_name -> description.
-
-    Returns:
-        List of SchemaField objects with inferred types and basic synonyms.
-    """
-    fields = []
-
-    for name, description in schema_dict.items():
-        # Heuristic type inference using generic triggers
-        name_norm = _normalize_for_match(name)
-        desc_norm = _normalize_for_match(description)
-
-        field_type = "text"
-        # Check each type in order of specificity
-        for ftype, triggers in TYPE_TRIGGERS.items():
-            if any(trigger in name_norm or trigger in desc_norm for trigger in triggers):
-                field_type = ftype
-                break
-
-        # Generate synonyms (generic, not hardcoded)
-        synonyms = _generate_synonyms(name, description)
-
-        fields.append(
-            SchemaField(
-                name=name,
-                description=description,
-                type=field_type,
-                synonyms=synonyms,
-            )
-        )
-
-    return fields
 
 

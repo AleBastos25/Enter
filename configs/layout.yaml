@@ -1,0 +1,21 @@
+reading:
+  make_line_nodes: true
+  line_join_y_overlap: 0.60  # unir spans/fragmentos na mesma linha (se precisar)
+
+columns:
+  enabled: true
+  max_k: 3  # tenta 1..3 colunas
+  min_gap_x_norm: 0.05  # gap mínimo entre clusters (normalizado)
+  min_col_width_norm: 0.12  # descarta coluna estreita (ruído)
+
+sections:
+  enabled: true
+  title_font_boost: 1.15  # > mediana(font_size) * boost => título
+  min_above_gap_lines: 1.3  # gap vertical (em "line-heights") sugerindo novo bloco
+
+matching:
+  prefer_same_column_bonus: 0.08
+  prefer_same_section_bonus: 0.05
+  cross_column_penalty: 0.06
+  cross_section_penalty: 0.04
+

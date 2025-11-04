@@ -252,33 +252,112 @@ def validate_percent(text: str) -> Tuple[bool, Optional[str]]:
     return (val is not None, val)
 
 
+def validate_text_multiline(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize text_multiline: join up to 2-3 lines if needed.
+
+    Returns first non-empty line or joined lines (up to 3).
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return (False, None)
+
+    # Join up to 3 lines
+    merged = " ".join(lines[:3])
+    return (True, merged)
+
+
+def normalize_enum(text: str, enum_options: list[str] | None) -> Optional[str]:
+    """Extract enum value by case-insensitive, accent-insensitive matching.
+
+    Returns canonical uppercase option if match found.
+    """
+    if not enum_options:
+        return None
+
+    import unicodedata
+
+    text_clean = text.strip()
+    text_norm = unicodedata.normalize("NFD", text_clean)
+    text_norm = "".join(c for c in text_norm if unicodedata.category(c) != "Mn")
+    text_norm = text_norm.upper()
+
+    # Try to match against options
+    for option in enum_options:
+        option_norm = unicodedata.normalize("NFD", option)
+        option_norm = "".join(c for c in option_norm if unicodedata.category(c) != "Mn")
+        option_norm = option_norm.upper()
+
+        # Check if text contains option or vice versa
+        if option_norm in text_norm or text_norm in option_norm:
+            # Extract first token that matches
+            tokens = text_clean.split()
+            for token in tokens:
+                token_norm = unicodedata.normalize("NFD", token.upper())
+                token_norm = "".join(
+                    c for c in token_norm if unicodedata.category(c) != "Mn"
+                )
+                if token_norm == option_norm:
+                    return option  # Return canonical form
+
+    return None
+
+
+def validate_enum_with_options(text: str, enum_options: list[str] | None) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize enum with options provided."""
+    val = normalize_enum(text, enum_options)
+    return (val is not None, val)
+
+
 # Registry of validators by type
 VALIDATOR_REGISTRY: dict[str, callable] = {
     "text": validate_text,
+    "text_multiline": validate_text_multiline,
     "id_simple": validate_id_simple,
     "date": validate_date,
     "money": validate_money,
     "uf": validate_uf,
     "cep": validate_cep,
+    "enum": validate_enum_with_options,  # Special: needs enum_options
     "int": validate_int,
     "float": validate_float,
     "percent": validate_percent,
 }
 
 
-def validate_and_normalize(field_or_type: "SchemaField | str", raw_text: str) -> Tuple[bool, Optional[str]]:
+def validate_and_normalize(
+    field_or_type: "SchemaField | str",
+    raw_text: str,
+    *,
+    enum_options: list[str] | None = None,
+) -> Tuple[bool, Optional[str]]:
     """HARD validator: returns (ok, normalized_value). If not ok, normalized_value is None.
 
     Can accept either a SchemaField or a type string directly.
 
     Uses the validator registry to find the appropriate validator by field type.
     Falls back to text validator if type is unknown.
+
+    Args:
+        field_or_type: SchemaField or type string.
+        raw_text: Raw text to validate.
+        enum_options: Optional enum options (used only for 'enum' type).
+
+    Returns:
+        Tuple of (ok, normalized_value).
     """
     if isinstance(field_or_type, str):
         ftype = field_or_type.lower()
     else:
         ftype = (field_or_type.type or "text").lower()
+        # Extract enum_options from SchemaField meta if available
+        if hasattr(field_or_type, "meta") and enum_options is None:
+            enum_options = field_or_type.meta.get("enum_options")
 
     validator = VALIDATOR_REGISTRY.get(ftype, validate_text)
+
+    # Special handling for enum type
+    if ftype == "enum":
+        return validate_enum_with_options(raw_text.strip(), enum_options)
+
     return validator(raw_text.strip())
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Tuple, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 
 __all__ = [
@@ -46,9 +46,10 @@ class SchemaField:
 
     name: str
     description: str
-    type: str = "text"  # allowed MVP0: "text" | "id_simple" | "date" | "money"
+    type: str = "text"  # allowed MVP0: "text" | "id_simple" | "date" | "money" | "enum" | "text_multiline" | ...
     regex: Optional[str] = None
     synonyms: List[str] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict)  # position_hint, enum_options, etc.
 
 
 @dataclass(frozen=True)
@@ -95,16 +96,17 @@ class Block:
     spans: List[InlineSpan] = field(default_factory=list)
 
 
-ReadingNodeType = Literal["page", "line"]
+ReadingNodeType = Literal["page", "line", "section", "column"]
 
 
 @dataclass(frozen=True)
 class ReadingNode:
-    """Minimal reading order node (MVP0: page → lines).
+    """Reading order node with hierarchy support.
 
     Invariants:
     - Exactly one node of type "page" with parent=None.
     - All "line" nodes have parent set to that page node id.
+    - Section and column nodes are optional metadata nodes.
     """
 
     id: int
@@ -112,6 +114,7 @@ class ReadingNode:
     parent: Optional[int]
     children: List[int] = field(default_factory=list)
     ref_block_ids: List[int] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict)  # bbox, column_id, section_id, etc.
 
 
 SpatialEdgeType = Literal["same_line_right_of", "first_below_same_column"]
@@ -148,12 +151,16 @@ class LayoutGraph:
 
     Invariants:
     - All references (Block.id, ReadingNode.id, SpatialEdge src/dst) are consistent.
+    - column_id_by_block and section_id_by_block are optional metadata (attached via setattr).
     """
 
     blocks: List[Block]
     reading_nodes: List[ReadingNode]
     spatial_edges: List[SpatialEdge]
     tables: List[TableStructure] = field(default_factory=list)
+    # Optional metadata (attached via setattr to avoid breaking frozen dataclass)
+    # column_id_by_block: Dict[int, int] = field(default_factory=dict)
+    # section_id_by_block: Dict[int, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

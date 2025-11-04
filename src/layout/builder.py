@@ -1,15 +1,17 @@
-"""Layout builder for constructing spatial graphs from PDF blocks.
-
-TODO: introduce explicit `line` nodes in next iteration (page→line), leveraging span/line geometry.
-"""
+"""Layout builder for constructing spatial graphs from PDF blocks with line nodes, columns, and sections."""
 
 from __future__ import annotations
 
 import re
+import statistics
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
+import yaml
+
 from ..core.models import Block, Document, LayoutGraph, ReadingNode, SpatialEdge
+from .heuristics import detect_columns, detect_sections
 
 
 @dataclass
@@ -302,20 +304,112 @@ def _make_spatial_edges_and_neighborhood(
 # ============================================================================
 
 
-def _make_page_node(blocks: list[Block]) -> list[ReadingNode]:
-    """Create a minimal page reading node (MVP0: no line nodes yet).
+def _load_config() -> dict:
+    """Load layout config from YAML, with fallback to defaults."""
+    config_path = Path("configs/layout.yaml")
+    defaults = {
+        "reading": {"make_line_nodes": True, "line_join_y_overlap": 0.60},
+        "columns": {
+            "enabled": True,
+            "max_k": 3,
+            "min_gap_x_norm": 0.05,
+            "min_col_width_norm": 0.12,
+        },
+        "sections": {
+            "enabled": True,
+            "title_font_boost": 1.15,
+            "min_above_gap_lines": 1.3,
+        },
+        "matching": {
+            "prefer_same_column_bonus": 0.08,
+            "prefer_same_section_bonus": 0.05,
+            "cross_column_penalty": 0.06,
+            "cross_section_penalty": 0.04,
+        },
+    }
+
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+                # Merge with defaults
+                config = defaults.copy()
+                for key in config:
+                    if key in loaded:
+                        config[key].update(loaded[key])
+                return config
+        except Exception:
+            return defaults
+    return defaults
+
+
+def _make_line_nodes(blocks: list[Block], config: dict) -> tuple[list[ReadingNode], dict[int, list[int]]]:
+    """Create explicit line nodes from blocks.
+
+    Splits blocks by newlines to create individual line nodes.
+
+    Returns:
+        (line_nodes, line_id_by_block) where line_id_by_block maps block_id -> list of line_ids.
+    """
+    if not config.get("reading", {}).get("make_line_nodes", True):
+        return [], {}
+
+    line_nodes: list[ReadingNode] = []
+    line_id_by_block: dict[int, list[int]] = {}
+    line_id = 1  # Start at 1 (page is 0)
+
+    for block in blocks:
+        lines = block.text.splitlines()
+        block_line_ids = []
+
+        for line_text in lines:
+            if not line_text.strip():
+                continue
+
+            # Estimate line bbox from block bbox (rough - split vertically)
+            # For simplicity, assume equal distribution
+            block_height = block.bbox[3] - block.bbox[1]
+            line_height = block_height / max(len(lines), 1)
+
+            # Find which line this is (approximate y position)
+            line_idx = lines.index(line_text)
+            y0 = block.bbox[1] + (line_idx * line_height)
+            y1 = y0 + line_height
+
+            line_bbox = (block.bbox[0], y0, block.bbox[2], y1)
+
+            line_node = ReadingNode(
+                id=line_id,
+                type="line",
+                parent=0,  # Page node
+                children=[],
+                ref_block_ids=[block.id],
+                meta={"bbox": line_bbox, "text": line_text.strip()},
+            )
+
+            line_nodes.append(line_node)
+            block_line_ids.append(line_id)
+            line_id += 1
+
+        if block_line_ids:
+            line_id_by_block[block.id] = block_line_ids
+
+    return line_nodes, line_id_by_block
+
+
+def _make_page_node(blocks: list[Block], line_nodes: list[ReadingNode]) -> list[ReadingNode]:
+    """Create page reading node with line children.
 
     Returns a list with a single ReadingNode of type "page".
     """
-    return [
-        ReadingNode(
-            id=0,
-            type="page",
-            parent=None,
-            children=[],
-            ref_block_ids=[b.id for b in blocks],
-        )
-    ]
+    page_node = ReadingNode(
+        id=0,
+        type="page",
+        parent=None,
+        children=[ln.id for ln in line_nodes],
+        ref_block_ids=[b.id for b in blocks],
+    )
+    return [page_node]
 
 
 # ============================================================================
@@ -323,22 +417,88 @@ def _make_page_node(blocks: list[Block]) -> list[ReadingNode]:
 # ============================================================================
 
 
+def _assign_column_section_to_blocks(
+    line_nodes: list[ReadingNode],
+    line_id_by_block: dict[int, list[int]],
+    column_by_line: dict[int, int],
+    section_by_line: dict[int, int],
+) -> tuple[dict[int, int], dict[int, int]]:
+    """Assign column_id and section_id to blocks based on their line nodes.
+
+    Uses mode (most common) of line assignments for each block.
+
+    Returns:
+        (column_id_by_block, section_id_by_block)
+    """
+    column_id_by_block: dict[int, int] = {}
+    section_id_by_block: dict[int, int] = {}
+
+    for block_id, line_ids in line_id_by_block.items():
+        # Get column_ids for lines of this block
+        block_columns = [column_by_line.get(ln_id) for ln_id in line_ids if ln_id in column_by_line]
+        if block_columns:
+            # Use mode (most common)
+            column_id_by_block[block_id] = statistics.mode(block_columns)
+
+        # Get section_ids for lines of this block
+        block_sections = [section_by_line.get(ln_id) for ln_id in line_ids if ln_id in section_by_line]
+        if block_sections:
+            # Use mode (most common)
+            section_id_by_block[block_id] = statistics.mode(block_sections)
+
+    return column_id_by_block, section_id_by_block
+
+
 def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
-    """Build a LayoutGraph from blocks with spatial edges and neighborhood.
+    """Build a LayoutGraph from blocks with spatial edges, neighborhood, lines, columns, and sections.
 
     Args:
         document: Document instance (used for validation).
         blocks: List of Block objects, assumed sorted (top→down, left→right).
 
     Returns:
-        LayoutGraph with blocks, reading nodes, spatial edges, and neighborhood index.
+        LayoutGraph with blocks, reading nodes (page + lines), spatial edges, neighborhood,
+        and column/section metadata.
     """
+    # Load config
+    config = _load_config()
+
     # Validate all blocks are from the same page
     pages = set(b.page for b in blocks)
     assert len(pages) == 1, f"All blocks must be from the same page, found: {pages}"
 
-    # Build reading nodes (minimal: just page)
-    reading_nodes = _make_page_node(blocks)
+    # Build line nodes
+    line_nodes, line_id_by_block = _make_line_nodes(blocks, config)
+
+    # Build reading nodes (page + lines)
+    page_nodes = _make_page_node(blocks, line_nodes)
+    reading_nodes = page_nodes + line_nodes
+
+    # Detect columns
+    column_by_line: dict[int, int] = {}
+    if config.get("columns", {}).get("enabled", True):
+        column_by_line = detect_columns(
+            line_nodes,
+            blocks,
+            max_k=config["columns"]["max_k"],
+            min_gap_x_norm=config["columns"]["min_gap_x_norm"],
+            min_col_width_norm=config["columns"]["min_col_width_norm"],
+        )
+
+    # Detect sections
+    section_by_line: dict[int, int] = {}
+    if config.get("sections", {}).get("enabled", True):
+        section_by_line = detect_sections(
+            line_nodes,
+            blocks,
+            title_font_boost=config["sections"]["title_font_boost"],
+            min_above_gap_lines=config["sections"]["min_above_gap_lines"],
+        )
+
+    # Assign to blocks
+    column_id_by_block, section_id_by_block = _assign_column_section_to_blocks(
+        line_nodes, line_id_by_block, column_by_line, section_by_line
+    )
 
     # Build spatial edges and neighborhood
     thresholds = LayoutThresholds()
@@ -352,9 +512,34 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
         tables=[],
     )
 
-    # Attach neighborhood as extra attribute (temporary hack, not in model yet)
-    # Use object.__setattr__ to bypass frozen dataclass restriction
+    # Attach metadata as extra attributes (temporary hack, not in model yet)
     object.__setattr__(layout_graph, "neighborhood", neighborhood)
+    object.__setattr__(layout_graph, "column_id_by_block", column_id_by_block)
+    object.__setattr__(layout_graph, "section_id_by_block", section_id_by_block)
+    object.__setattr__(layout_graph, "line_id_by_block", line_id_by_block)
 
     return layout_graph
+
+
+def dump_layout_debug(layout: LayoutGraph) -> None:
+    """Print debug information about layout structure."""
+    line_nodes = [rn for rn in layout.reading_nodes if rn.type == "line"]
+    column_by_block = getattr(layout, "column_id_by_block", {})
+    section_by_block = getattr(layout, "section_id_by_block", {})
+
+    print(f"Layout Debug:")
+    print(f"  Blocks: {len(layout.blocks)}")
+    print(f"  Line nodes: {len(line_nodes)}")
+    print(f"  Columns (distinct): {len(set(column_by_block.values()))}")
+    print(f"  Sections (distinct): {len(set(section_by_block.values()))}")
+    print(f"\nFirst 8 line nodes:")
+    block_by_id = {b.id: b for b in layout.blocks}
+
+    for i, ln in enumerate(line_nodes[:8]):
+        block = next((b for b in layout.blocks if b.id in ln.ref_block_ids), None)
+        if block:
+            col = column_by_block.get(block.id, None)
+            sec = section_by_block.get(block.id, None)
+            text_preview = block.text.splitlines()[0][:60] if block.text else ""
+            print(f"  [line {ln.id}] col={col} sec={sec} text='{text_preview}'")
 

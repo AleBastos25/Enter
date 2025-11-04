@@ -11,7 +11,13 @@ from ..validation.validators import validate_and_normalize
 LABEL_SEP_RE = re.compile(r"[:：]\s*")  # ':' variants
 
 
-def _text_candidates(dst_block: Block, max_lines_window: int = 3, max_tokens: int = 12) -> list[str]:
+def _text_candidates(
+    dst_block: Block,
+    layout: LayoutGraph,
+    field_type: str = "text",
+    max_lines_window: int = 3,
+    max_tokens: int = 12,
+) -> list[str]:
     """Generate text candidates from destination block.
 
     Returns a ranked list of small text snippets to try:
@@ -19,8 +25,12 @@ def _text_candidates(dst_block: Block, max_lines_window: int = 3, max_tokens: in
     2) 2-line and 3-line windows (joined with space)
     3) First K tokens of the first 1-2 lines (sliding windows of up to 3 tokens)
 
+    For text_multiline, limits windows to same section to avoid leaking.
+
     Args:
         dst_block: Destination block.
+        layout: LayoutGraph for section metadata.
+        field_type: Field type (text_multiline uses section-aware logic).
         max_lines_window: Maximum lines to consider for windows.
         max_tokens: Maximum tokens to extract per line.
 
@@ -30,6 +40,10 @@ def _text_candidates(dst_block: Block, max_lines_window: int = 3, max_tokens: in
     lines = [ln.strip() for ln in dst_block.text.splitlines() if ln.strip()]
     if not lines:
         return []
+
+    # Get section of this block (for text_multiline)
+    section_by_block = getattr(layout, "section_id_by_block", {})
+    dst_section = section_by_block.get(dst_block.id)
 
     candidates: list[str] = []
     seen = set()
@@ -41,12 +55,23 @@ def _text_candidates(dst_block: Block, max_lines_window: int = 3, max_tokens: in
             candidates.append(line)
 
     # 2) 2-line and 3-line windows
-    for window_size in [2, 3]:
-        for i in range(len(lines) - window_size + 1):
-            window_text = " ".join(lines[i : i + window_size])
-            if window_text and window_text not in seen:
-                seen.add(window_text)
-                candidates.append(window_text)
+    # For text_multiline, limit to same section (only if we have section info)
+    if field_type == "text_multiline" and dst_section is not None:
+        # Only create windows within this block (assume same section)
+        for window_size in [2, 3]:
+            for i in range(len(lines) - window_size + 1):
+                window_text = " ".join(lines[i : i + window_size])
+                if window_text and window_text not in seen:
+                    seen.add(window_text)
+                    candidates.append(window_text)
+    else:
+        # Normal behavior for other types
+        for window_size in [2, 3]:
+            for i in range(len(lines) - window_size + 1):
+                window_text = " ".join(lines[i : i + window_size])
+                if window_text and window_text not in seen:
+                    seen.add(window_text)
+                    candidates.append(window_text)
 
     # 3) Token windows from first 1-2 lines
     max_lines_for_tokens = min(2, len(lines))
@@ -71,7 +96,46 @@ def _text_candidates(dst_block: Block, max_lines_window: int = 3, max_tokens: in
     return candidates
 
 
-def _score_candidate(field_type: str, text: str, relation: str, base_ok: bool) -> float:
+def _position_bonus(field_meta: dict[str, object] | None, bbox: tuple[float, float, float, float]) -> float:
+    """Returns 0.0 or small bonus (e.g., 0.05) if bbox center falls into the hinted quadrant.
+
+    Args:
+        field_meta: SchemaField meta dict (may contain position_hint).
+        bbox: Normalized bbox (x0, y0, x1, y1) in [0,1].
+
+    Returns:
+        Bonus score (0.0 or 0.05).
+    """
+    if not field_meta:
+        return 0.0
+
+    position_hint = field_meta.get("position_hint")
+    if not position_hint:
+        return 0.0
+
+    x0, y0, x1, y1 = bbox
+    center_x = (x0 + x1) / 2.0
+    center_y = (y0 + y1) / 2.0
+
+    # Determine quadrant
+    is_left = center_x < 0.5
+    is_top = center_y < 0.5
+
+    if position_hint == "top-left" and is_left and is_top:
+        return 0.05
+    if position_hint == "top-right" and not is_left and is_top:
+        return 0.05
+    if position_hint == "bottom-left" and is_left and not is_top:
+        return 0.05
+    if position_hint == "bottom-right" and not is_left and not is_top:
+        return 0.05
+
+    return 0.0
+
+
+def _score_candidate(
+    field_type: str, text: str, relation: str, base_ok: bool, position_bonus: float = 0.0
+) -> float:
     """Score a candidate text for a field (field-agnostic).
 
     Args:
@@ -101,6 +165,9 @@ def _score_candidate(field_type: str, text: str, relation: str, base_ok: bool) -
     if field_type == "money" and re.search(r"\d", text):
         score += 0.05
 
+    # Position bonus
+    score += position_bonus
+
     return min(score, 1.0)
 
 
@@ -126,20 +193,30 @@ def extract_from_candidate(
     if not dst_block:
         return None, 0.0, {"node_id": cand.node_id, "relation": cand.relation, "reason": "block_not_found"}
 
-    # Generate candidates
-    cands = _text_candidates(dst_block, max_lines_window=3, max_tokens=12)
+    # Generate candidates (section-aware for text_multiline)
+    cands = _text_candidates(dst_block, layout, field.type or "text", max_lines_window=3, max_tokens=12)
 
     best = (None, 0.0, None)  # (value, score, chosen_text)
+
+    # Get enum_options from field meta if available
+    enum_options = field.meta.get("enum_options") if field.meta else None
+
+    # Calculate position bonus once
+    position_bonus = _position_bonus(field.meta, dst_block.bbox)
 
     for txt in cands:
         # Remove "label: " if present
         txt_clean = LABEL_SEP_RE.split(txt, 1)[-1] if ":" in txt else txt
 
-        # Validate and normalize
-        ok, normalized = validate_and_normalize(field.type or "text", txt_clean)
+        # Validate and normalize (with enum_options if enum type)
+        ok, normalized = validate_and_normalize(
+            field.type or "text", txt_clean, enum_options=enum_options
+        )
 
-        # Score candidate
-        score = _score_candidate(field.type or "text", txt_clean, cand.relation, ok)
+        # Score candidate (with position bonus)
+        score = _score_candidate(
+            field.type or "text", txt_clean, cand.relation, ok, position_bonus
+        )
 
         if ok and score > best[1]:
             best = (normalized, score, txt_clean)

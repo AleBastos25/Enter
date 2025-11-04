@@ -185,10 +185,20 @@ def match_fields(
         # 3) Generate candidates via neighborhood
         seen_dst_ids = set()  # Avoid duplicates across label blocks
 
+        # Load matching config
+        matching_cfg = _load_matching_config()
+
+        # Get column/section metadata
+        column_by_block = getattr(layout, "column_id_by_block", {})
+        section_by_block = getattr(layout, "section_id_by_block", {})
+
         for label_block_id in label_block_ids:
             nb = neighborhood.get(label_block_id)
             if not nb:
                 continue
+
+            label_col = column_by_block.get(label_block_id)
+            label_sec = section_by_block.get(label_block_id)
 
             # Check right_on_same_line (priority)
             if nb.right_on_same_line is not None:
@@ -204,7 +214,23 @@ def match_fields(
                     if validate:
                         type_ok = 1.0 if validate(field, raw_line) else 0.0
 
-                    total_score = 0.65 * type_ok + 0.35 * spatial_score
+                    # Column/section bonuses/penalties
+                    dst_col = column_by_block.get(dst_id)
+                    dst_sec = section_by_block.get(dst_id)
+
+                    if label_col is not None and dst_col is not None:
+                        if label_col == dst_col:
+                            spatial_score += matching_cfg["prefer_same_column_bonus"]
+                        else:
+                            spatial_score -= matching_cfg["cross_column_penalty"]
+
+                    if label_sec is not None and dst_sec is not None:
+                        if label_sec == dst_sec:
+                            spatial_score += matching_cfg["prefer_same_section_bonus"]
+                        else:
+                            spatial_score -= matching_cfg["cross_section_penalty"]
+
+                    spatial_score = max(0.0, min(1.0, spatial_score))  # Clamp [0,1]
 
                     candidates.append(
                         FieldCandidate(
@@ -231,7 +257,23 @@ def match_fields(
                     if validate:
                         type_ok = 1.0 if validate(field, raw_line) else 0.0
 
-                    total_score = 0.65 * type_ok + 0.35 * spatial_score
+                    # Column/section bonuses/penalties
+                    dst_col = column_by_block.get(dst_id)
+                    dst_sec = section_by_block.get(dst_id)
+
+                    if label_col is not None and dst_col is not None:
+                        if label_col == dst_col:
+                            spatial_score += matching_cfg["prefer_same_column_bonus"]
+                        else:
+                            spatial_score -= matching_cfg["cross_column_penalty"]
+
+                    if label_sec is not None and dst_sec is not None:
+                        if label_sec == dst_sec:
+                            spatial_score += matching_cfg["prefer_same_section_bonus"]
+                        else:
+                            spatial_score -= matching_cfg["cross_section_penalty"]
+
+                    spatial_score = max(0.0, min(1.0, spatial_score))  # Clamp [0,1]
 
                     candidates.append(
                         FieldCandidate(
@@ -246,6 +288,22 @@ def match_fields(
 
         # 4) Dedupe and sort by score
         candidates = _dedupe_candidates(candidates)
+
+        # 4.5) Avoid cross-column jumps if same-column candidate exists
+        # Get column of label (if any)
+        if label_block_ids:
+            label_col = column_by_block.get(label_block_ids[0])
+            if label_col is not None:
+                # Filter: prefer same-column candidates
+                same_col = [c for c in candidates if column_by_block.get(c.node_id) == label_col]
+                cross_col = [c for c in candidates if column_by_block.get(c.node_id) != label_col]
+                # If we have same-column candidates, don't include cross-column unless no valid same-column
+                if same_col:
+                    # Keep same-column candidates, but allow cross-column if they're very high score
+                    valid_same_col = [c for c in same_col if c.scores.get("type", 0.0) > 0.0]
+                    if valid_same_col:
+                        candidates = same_col + [c for c in cross_col if c.scores.get("type", 0.0) > 0.8]
+
         # Sort by total score (descending)
         candidates.sort(
             key=lambda c: 0.65 * c.scores.get("type", 0.0) + 0.35 * c.scores.get("spatial", 0.0),

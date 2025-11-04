@@ -1,3 +1,9 @@
 PyMuPDF>=1.24
 PyYAML>=6.0
+openai>=1.0.0  # Optional: for LLM fallback
+numpy>=1.20.0  # For embedding index
+sentence-transformers>=2.0.0  # Optional: for local embeddings (fallback to hash if not installed)
+faker>=20.0.0  # For synthetic data generation
+weasyprint>=60.0  # For HTML to PDF conversion (alternative: wkhtmltopdf)
+Pillow>=10.0.0  # For image manipulation in noise module
 

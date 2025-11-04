@@ -11,7 +11,7 @@ from typing import Optional
 import yaml
 
 from ..core.models import Block, Document, LayoutGraph, ReadingNode, SpatialEdge
-from .heuristics import detect_columns, detect_sections
+from .heuristics import detect_columns, detect_paragraphs, detect_sections
 
 
 @dataclass
@@ -320,9 +320,15 @@ def _load_config() -> dict:
             "title_font_boost": 1.15,
             "min_above_gap_lines": 1.3,
         },
+        "paragraphs": {
+            "enabled": True,
+            "min_gap_lines": 0.8,
+            "margin_alignment_tol": 0.02,
+        },
         "matching": {
             "prefer_same_column_bonus": 0.08,
             "prefer_same_section_bonus": 0.05,
+            "prefer_same_paragraph_bonus": 0.03,
             "cross_column_penalty": 0.06,
             "cross_section_penalty": 0.04,
         },
@@ -417,21 +423,23 @@ def _make_page_node(blocks: list[Block], line_nodes: list[ReadingNode]) -> list[
 # ============================================================================
 
 
-def _assign_column_section_to_blocks(
+def _assign_column_section_paragraph_to_blocks(
     line_nodes: list[ReadingNode],
     line_id_by_block: dict[int, list[int]],
     column_by_line: dict[int, int],
     section_by_line: dict[int, int],
-) -> tuple[dict[int, int], dict[int, int]]:
-    """Assign column_id and section_id to blocks based on their line nodes.
+    paragraph_by_line: dict[int, int],
+) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
+    """Assign column_id, section_id, and paragraph_id to blocks based on their line nodes.
 
     Uses mode (most common) of line assignments for each block.
 
     Returns:
-        (column_id_by_block, section_id_by_block)
+        (column_id_by_block, section_id_by_block, paragraph_id_by_block)
     """
     column_id_by_block: dict[int, int] = {}
     section_id_by_block: dict[int, int] = {}
+    paragraph_id_by_block: dict[int, int] = {}
 
     for block_id, line_ids in line_id_by_block.items():
         # Get column_ids for lines of this block
@@ -446,7 +454,13 @@ def _assign_column_section_to_blocks(
             # Use mode (most common)
             section_id_by_block[block_id] = statistics.mode(block_sections)
 
-    return column_id_by_block, section_id_by_block
+        # Get paragraph_ids for lines of this block
+        block_paragraphs = [paragraph_by_line.get(ln_id) for ln_id in line_ids if ln_id in paragraph_by_line]
+        if block_paragraphs:
+            # Use mode (most common)
+            paragraph_id_by_block[block_id] = statistics.mode(block_paragraphs)
+
+    return column_id_by_block, section_id_by_block, paragraph_id_by_block
 
 
 def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
@@ -495,9 +509,21 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
             min_above_gap_lines=config["sections"]["min_above_gap_lines"],
         )
 
+    # Detect paragraphs (requires columns and sections)
+    paragraph_by_line: dict[int, int] = {}
+    if config.get("paragraphs", {}).get("enabled", True):
+        paragraph_by_line = detect_paragraphs(
+            line_nodes,
+            blocks,
+            column_by_line,
+            section_by_line,
+            min_gap_lines=config.get("paragraphs", {}).get("min_gap_lines", 0.8),
+            margin_alignment_tol=config.get("paragraphs", {}).get("margin_alignment_tol", 0.02),
+        )
+
     # Assign to blocks
-    column_id_by_block, section_id_by_block = _assign_column_section_to_blocks(
-        line_nodes, line_id_by_block, column_by_line, section_by_line
+    column_id_by_block, section_id_by_block, paragraph_id_by_block = _assign_column_section_paragraph_to_blocks(
+        line_nodes, line_id_by_block, column_by_line, section_by_line, paragraph_by_line
     )
 
     # Build spatial edges and neighborhood
@@ -531,6 +557,7 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
     object.__setattr__(layout_graph, "neighborhood", neighborhood)
     object.__setattr__(layout_graph, "column_id_by_block", column_id_by_block)
     object.__setattr__(layout_graph, "section_id_by_block", section_id_by_block)
+    object.__setattr__(layout_graph, "paragraph_id_by_block", paragraph_id_by_block)
     object.__setattr__(layout_graph, "line_id_by_block", line_id_by_block)
     if pdf_lines:
         object.__setattr__(layout_graph, "pdf_lines", pdf_lines)

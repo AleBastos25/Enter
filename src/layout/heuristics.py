@@ -203,3 +203,104 @@ def detect_sections(
 
     return assignment
 
+
+def detect_paragraphs(
+    line_nodes: List[ReadingNode],
+    blocks: List[Block],
+    column_by_line: dict[int, int],
+    section_by_line: dict[int, int],
+    min_gap_lines: float = 0.8,
+    margin_alignment_tol: float = 0.02,
+) -> dict[int, int]:
+    """Detect paragraphs by grouping consecutive lines in same column/section.
+
+    Groups consecutive lines that:
+    - Are in the same column and section
+    - Have small vertical gap (less than min_gap_lines)
+    - Have similar left margin alignment (within tolerance)
+
+    Args:
+        line_nodes: List of ReadingNode(type="line") ordered by reading order.
+        blocks: List of blocks for bbox lookup.
+        column_by_line: Dictionary mapping line_id -> column_id.
+        section_by_line: Dictionary mapping line_id -> section_id.
+        min_gap_lines: Minimum gap (in line heights) to start a new paragraph.
+        margin_alignment_tol: Tolerance for left margin alignment (normalized).
+
+    Returns:
+        Dictionary mapping line_node.id -> paragraph_id (0-based).
+    """
+    if not line_nodes:
+        return {}
+
+    block_by_id = {b.id: b for b in blocks}
+    assignment: dict[int, int] = {}
+    paragraph_id = 0
+
+    # Group lines by column and section first
+    groups: dict[tuple[int, int], list[ReadingNode]] = {}
+    for ln in line_nodes:
+        col_id = column_by_line.get(ln.id, 0)
+        sec_id = section_by_line.get(ln.id, 0)
+        key = (col_id, sec_id)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(ln)
+
+    # Within each group, detect paragraphs
+    for (col_id, sec_id), group_lines in groups.items():
+        if not group_lines:
+            continue
+
+        # Sort by y position
+        group_lines.sort(key=lambda ln: ln.meta.get("bbox", [0, 0, 0, 0])[1] if ln.meta.get("bbox") else 0)
+
+        current_paragraph_id = paragraph_id
+        paragraph_id += 1
+
+        # First line always starts a paragraph
+        if group_lines:
+            assignment[group_lines[0].id] = current_paragraph_id
+
+        # For subsequent lines, check gap and alignment
+        for i in range(1, len(group_lines)):
+            prev_ln = group_lines[i - 1]
+            curr_ln = group_lines[i]
+
+            prev_bbox = prev_ln.meta.get("bbox")
+            curr_bbox = curr_ln.meta.get("bbox")
+
+            if not prev_bbox or not curr_bbox:
+                # Missing bbox, start new paragraph
+                current_paragraph_id = paragraph_id
+                paragraph_id += 1
+                assignment[curr_ln.id] = current_paragraph_id
+                continue
+
+            # Calculate vertical gap
+            gap = curr_bbox[1] - prev_bbox[3]  # y0_curr - y1_prev
+
+            # Estimate line height from previous line
+            prev_block_id = prev_ln.ref_block_ids[0] if prev_ln.ref_block_ids else None
+            prev_block = block_by_id.get(prev_block_id) if prev_block_id else None
+            line_height = prev_block.font_size * 1.2 if prev_block and prev_block.font_size else 0.01
+            if line_height <= 0:
+                line_height = 0.01
+
+            gap_lines = gap / line_height if line_height > 0 else float("inf")
+
+            # Check margin alignment (left margin)
+            prev_left = prev_bbox[0]
+            curr_left = curr_bbox[0]
+            margin_diff = abs(curr_left - prev_left)
+
+            # Start new paragraph if:
+            # - Gap is large (>= min_gap_lines)
+            # - Margin difference is significant (>= margin_alignment_tol)
+            if gap_lines >= min_gap_lines or margin_diff >= margin_alignment_tol:
+                current_paragraph_id = paragraph_id
+                paragraph_id += 1
+
+            assignment[curr_ln.id] = current_paragraph_id
+
+    return assignment

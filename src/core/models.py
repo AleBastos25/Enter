@@ -16,6 +16,7 @@ __all__ = [
     "LayoutGraph",
     "FieldCandidate",
     "FieldResult",
+    "PageContext",
 ]
 
 
@@ -96,16 +97,19 @@ class Block:
     spans: List[InlineSpan] = field(default_factory=list)
 
 
-ReadingNodeType = Literal["page", "line", "section", "column"]
+ReadingNodeType = Literal["page", "column", "section", "paragraph", "line"]
 
 
 @dataclass(frozen=True)
 class ReadingNode:
     """Reading order node with hierarchy support.
 
+    Hierarchy: page → column → section → paragraph → line
+
     Invariants:
-    - Exactly one node of type "page" with parent=None.
-    - All "line" nodes have parent set to that page node id.
+    - Exactly one node of type "page" per page with parent=None.
+    - All "line" nodes have parent set to paragraph (or page if no paragraph).
+    - Paragraph nodes group consecutive lines in same section/column.
     - Section and column nodes are optional metadata nodes.
     """
 
@@ -114,7 +118,7 @@ class ReadingNode:
     parent: Optional[int]
     children: List[int] = field(default_factory=list)
     ref_block_ids: List[int] = field(default_factory=list)
-    meta: Dict[str, Any] = field(default_factory=dict)  # bbox, column_id, section_id, etc.
+    meta: Dict[str, Any] = field(default_factory=dict)  # bbox, column_id, section_id, paragraph_id, page_index, etc.
 
 
 SpatialEdgeType = Literal["same_line_right_of", "first_below_same_column"]
@@ -172,20 +176,23 @@ class TableStructure:
 
 @dataclass(frozen=True)
 class LayoutGraph:
-    """Aggregates geometry, reading order, and spatial relations.
+    """Aggregates geometry, reading order, and spatial relations for a single page.
 
     Invariants:
     - All references (Block.id, ReadingNode.id, SpatialEdge src/dst) are consistent.
-    - column_id_by_block and section_id_by_block are optional metadata (attached via setattr).
+    - column_id_by_block, section_id_by_block, paragraph_id_by_block are optional metadata (attached via setattr).
+    - page_index indicates which page this graph represents.
     """
 
     blocks: List[Block]
     reading_nodes: List[ReadingNode]
     spatial_edges: List[SpatialEdge]
     tables: List[TableStructure] = field(default_factory=list)
+    page_index: int = 0
     # Optional metadata (attached via setattr to avoid breaking frozen dataclass)
     # column_id_by_block: Dict[int, int] = field(default_factory=dict)
     # section_id_by_block: Dict[int, int] = field(default_factory=dict)
+    # paragraph_id_by_block: Dict[int, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -195,7 +202,7 @@ class FieldCandidate:
     field: SchemaField
     node_id: int
     source_label_block_id: int
-    relation: SpatialEdgeType | Literal["same_table_row"]
+    relation: SpatialEdgeType | Literal["same_table_row", "same_block", "global_enum_scan"]
     scores: Dict[str, float] = field(default_factory=dict)
     local_context: Optional[str] = None
 
@@ -206,6 +213,7 @@ class FieldResult:
 
     Invariants:
     - If value is None, set source="none" and confidence=0.0, with a "no_evidence" trace.
+    - page_index indicates which page this result came from (if multi-page).
     """
 
     field: str
@@ -213,5 +221,19 @@ class FieldResult:
     confidence: float
     source: Literal["heuristic", "table", "llm", "none"]
     trace: Dict[str, object] = field(default_factory=dict)
+    page_index: int = 0  # Page index where this result was found
+
+
+@dataclass
+class PageContext:
+    """Context for a single page during processing.
+
+    Holds layout graph, embedding index, and semantic signals per field.
+    """
+
+    page_index: int
+    layout: LayoutGraph
+    embedding_index: Optional[Any] = None  # CosineIndex (avoid circular import)
+    signals_by_field: Dict[str, float] = field(default_factory=dict)  # max cosine per field
 
 

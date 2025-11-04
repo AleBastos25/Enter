@@ -1,0 +1,2 @@
+"""Synthetic document generation package."""
+

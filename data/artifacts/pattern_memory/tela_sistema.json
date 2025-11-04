@@ -1,0 +1,1368 @@
+{
+  "label": "tela_sistema",
+  "fields": {
+    "data_base": {
+      "field_name": "data_base",
+      "synonyms": [
+        {
+          "text": "detalhamento",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "saldos",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "parcelas",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "data",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "referencia",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "05",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "09",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "2025",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "esconder",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "filtros",
+          "weight": 5.561050036876789
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 5.561050036876789
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            2,
+            1
+          ],
+          "grid_value": [
+            2,
+            1
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 5.561050036876789
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.17940178260093015
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.20252111038755213
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.23804644185517995
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.29134055110947066
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.32888531572096813
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3712684364911421
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.41911342752536646
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.47312415456639956
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5340951898293027
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.602923501253549
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.6806216481373265
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.76833267728
+        }
+      ]
+    },
+    "data_verncimento": {
+      "field_name": "data_verncimento",
+      "synonyms": [
+        {
+          "text": "detalhamento",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "saldos",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "parcelas",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "data",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "referencia",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "05",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "09",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "2025",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "esconder",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "filtros",
+          "weight": 5.561050036876789
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 5.561050036876789
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            2,
+            1
+          ],
+          "grid_value": [
+            2,
+            1
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 5.561050036876789
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.17940178260093015
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.20252111038755213
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.23804644185517995
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.29134055110947066
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.32888531572096813
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3712684364911421
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.41911342752536646
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.47312415456639956
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5340951898293027
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.602923501253549
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.6806216481373265
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.76833267728
+        }
+      ]
+    },
+    "sistema": {
+      "field_name": "sistema",
+      "synonyms": [
+        {
+          "text": "sistema",
+          "weight": 11.351397847035873
+        },
+        {
+          "text": "saldo",
+          "weight": 11.122100073753575
+        },
+        {
+          "text": "consignado",
+          "weight": 5.790347810159088
+        },
+        {
+          "text": "vcto",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "mais",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "antigo",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "dias",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "atraso",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "vencido",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "vencer",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "total",
+          "weight": 5.561050036876789
+        },
+        {
+          "text": "geral",
+          "weight": 5.561050036876789
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 11.351397847035873
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            3,
+            0
+          ],
+          "grid_value": [
+            3,
+            0
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 5.790347810159088
+        },
+        {
+          "grid_label": [
+            2,
+            1
+          ],
+          "grid_value": [
+            2,
+            1
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 5.561050036876789
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.15262840282212772
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.17940178260093015
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.18679902394932335
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.20252111038755213
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.2108716268091963
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.23804644185517995
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.24786176786253641
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.29134055110947066
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3033533435125684
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.32888531572096813
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3424461846324116
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.3712684364911421
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3865768809778656
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.41911342752536646
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.43639465589896553
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.47312415456639956
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.4926323975077047
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.5340951898293027
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5561174404719936
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.602923501253549
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.6277837372485933
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.6806216481373265
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.7086855978106273
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            16,
+            16
+          ],
+          "weight": 0.76833267728
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": false,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.8000132
+        }
+      ]
+    },
+    "cidade": {
+      "field_name": "cidade",
+      "synonyms": [
+        {
+          "text": "cidade",
+          "weight": 7.165815929677076
+        },
+        {
+          "text": "mozarlandia",
+          "weight": 7.165815929677076
+        },
+        {
+          "text": "go",
+          "weight": 7.165815929677076
+        },
+        {
+          "text": "cep",
+          "weight": 7.165815929677076
+        },
+        {
+          "text": "76709970",
+          "weight": 7.165815929677076
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 7.165815929677076
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            0,
+            2
+          ],
+          "grid_value": [
+            0,
+            2
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 7.165815929677076
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.15262840282212772
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.16547449211833995
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.1722974720099333
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.18679902394932335
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.2108716268091963
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.22861980275771482
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.24786176786253641
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.2687232480602284
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.2798034652855356
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.3033533435125684
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.3424461846324116
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.3865768809778656
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.43639465589896553
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.4926323975077047
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.5561174404719936
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.6277837372485933
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.7086855978106273
+        },
+        {
+          "regex_id": "cep",
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            8,
+            8
+          ],
+          "weight": 0.8000132
+        }
+      ]
+    },
+    "data_referencia": {
+      "field_name": "data_referencia",
+      "synonyms": [
+        {
+          "text": "data",
+          "weight": 12.058200354350452
+        },
+        {
+          "text": "base",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "vencimento",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "04",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "02",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "2021",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "25",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "03",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "2030",
+          "weight": 6.029100177175227
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 4.173473458887702
+        },
+        {
+          "relation": "same_table_row",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 1.8556267182875261
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            0,
+            0
+          ],
+          "grid_value": [
+            0,
+            0
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 6.029100177175227
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.15892170223045368
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.19450127441620507
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.2195664585685093
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.25808180743704334
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.31586145721841774
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3565662064060929
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.40251653579536195
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.4543884380455701
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5129450203120623
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5790477306039085
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.6536690308710884
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.737906703259712
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.833
+        }
+      ]
+    },
+    "selecao_de_parcelas": {
+      "field_name": "selecao_de_parcelas",
+      "synonyms": [
+        {
+          "text": "data",
+          "weight": 12.058200354350452
+        },
+        {
+          "text": "base",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "vencimento",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "04",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "02",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "2021",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "25",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "03",
+          "weight": 6.029100177175227
+        },
+        {
+          "text": "2030",
+          "weight": 6.029100177175227
+        }
+      ],
+      "offsets": [
+        {
+          "relation": "same_block",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 4.173473458887702
+        },
+        {
+          "relation": "same_table_row",
+          "dx": 0.0,
+          "dy": 0.0,
+          "tol": 0.06,
+          "weight": 1.8556267182875261
+        }
+      ],
+      "fingerprints": [
+        {
+          "grid_label": [
+            0,
+            0
+          ],
+          "grid_value": [
+            0,
+            0
+          ],
+          "section_hint": 1,
+          "column_hint": 0,
+          "weight": 6.029100177175227
+        }
+      ],
+      "value_shapes": [
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.15892170223045368
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.19450127441620507
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.2195664585685093
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.25808180743704334
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.31586145721841774
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.3565662064060929
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.40251653579536195
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.4543884380455701
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5129450203120623
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.5790477306039085
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.6536690308710884
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.737906703259712
+        },
+        {
+          "regex_id": null,
+          "enum_key": null,
+          "has_digits": true,
+          "length_range": [
+            10,
+            10
+          ],
+          "weight": 0.833
+        }
+      ]
+    }
+  }
+}

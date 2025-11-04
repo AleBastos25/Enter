@@ -1,4 +1,4 @@
-"""PDF loader for extracting normalized text blocks from one-page OCR'd PDFs."""
+"""PDF loader for extracting normalized text blocks from multi-page OCR'd PDFs."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ import os
 import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Optional, Tuple, List, Dict, Any, Iterator
 
 import fitz  # PyMuPDF
 
 from ..core.models import Block, Document, InlineSpan
 
-__all__ = ["load_document", "extract_blocks"]
+__all__ = ["load_document", "extract_blocks", "iter_page_blocks"]
 
 # Heuristic: if horizontal gap (in points) between spans is larger than this
 # factor * reference_font_size, we will inject a space when concatenating spans.
@@ -171,8 +171,9 @@ def load_document(
 ) -> Document:
     """Create a Document instance from a PDF file path.
 
-    - Ensures the PDF has exactly one page (MVP0 constraint).
+    - Supports multi-page PDFs.
     - Uses filename stem as doc_id if none is provided.
+    - Sets page_count in meta.
     """
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -182,26 +183,118 @@ def load_document(
         stem = Path(pdf_path).stem
         doc_id = stem or hashlib.md5(pdf_path.encode()).hexdigest()[:8]
 
-    # Validate one-page constraint eagerly
+    # Get page count
     doc = fitz.open(pdf_path)
     try:
-        if len(doc) != 1:
-            raise ValueError(
-                f"Only 1-page PDFs are supported in MVP0. Found {len(doc)} pages in {pdf_path}."
-            )
+        page_count = len(doc)
     finally:
         doc.close()
 
-    meta = {"filename": os.path.basename(pdf_path)}
+    meta = {"filename": os.path.basename(pdf_path), "page_count": page_count}
     return Document(id=doc_id, label=label or "unknown", path=pdf_path, data=None, meta=meta)
 
 
+def _extract_blocks_from_page(page: fitz.Page, page_index: int, start_block_id: int = 0) -> Tuple[List[Block], int]:
+    """Extract normalized text blocks from a single page.
+
+    Args:
+        page: PyMuPDF page object.
+        page_index: Page index (0-based).
+        start_block_id: Starting block ID for this page.
+
+    Returns:
+        Tuple of (blocks, next_block_id).
+    """
+    width, height = page.rect.width, page.rect.height
+    text_dict = page.get_text("dict")
+    blocks: List[Block] = []
+    block_id = start_block_id
+
+    for block_dict in text_dict.get("blocks", []):
+        if block_dict.get("type") != 0:  # 0 = text block
+            continue
+
+        block_bbox: Optional[Tuple[float, float, float, float]] = None
+        block_line_texts: List[str] = []
+        all_inline_spans: List[InlineSpan] = []
+
+        for line_dict in block_dict.get("lines", []):
+            # Update/expand block bbox
+            line_bbox = tuple(line_dict.get("bbox", block_dict.get("bbox")))  # type: ignore
+            if block_bbox is None:
+                block_bbox = line_bbox
+            else:
+                block_bbox = (
+                    min(block_bbox[0], line_bbox[0]),
+                    min(block_bbox[1], line_bbox[1]),
+                    max(block_bbox[2], line_bbox[2]),
+                    max(block_bbox[3], line_bbox[3]),
+                )
+
+            # Build spans for this line with spacing heuristics
+            span_infos = [_span_info(sd) for sd in line_dict.get("spans", [])]
+            line_text, inline_spans = _concat_line_spans(span_infos)
+            line_text = _clean_text(line_text, preserve_newlines=False)
+
+            # (Optional) simple de-hyphenation across lines: if current line ends with "-",
+            # we will merge with the next line without inserting a space/newline when joining below.
+            block_line_texts.append(line_text)
+            all_inline_spans.extend(inline_spans)
+
+        if block_bbox is None:
+            # Fallback to the block bbox if lines were empty
+            block_bbox = tuple(block_dict.get("bbox", (0, 0, width, height)))  # type: ignore
+
+        # Join lines with newlines, but handle hyphen join (end-with-'-')
+        joined_lines: List[str] = []
+        for i, ln in enumerate(block_line_texts):
+            if i > 0 and joined_lines:
+                prev = joined_lines[-1]
+                if prev.endswith("-"):
+                    # remove hyphen and concatenate without space
+                    joined_lines[-1] = prev[:-1] + ln.lstrip()
+                else:
+                    joined_lines.append("\n" + ln)
+            else:
+                joined_lines.append(ln)
+        raw_text = "".join(joined_lines)
+
+        cleaned_text = _clean_text(raw_text, preserve_newlines=True)
+        if not cleaned_text:
+            continue
+
+        normalized_bbox = _normalize_bbox(block_bbox, width, height)
+
+        # Bold aggregation & avg font size
+        is_bold = any(sp.bold for sp in all_inline_spans)
+        font_sizes = [sp.font_size for sp in all_inline_spans if sp.font_size is not None]
+        avg_font_size = sum(font_sizes) / len(font_sizes) if font_sizes else None
+
+        blocks.append(
+            Block(
+                id=block_id,
+                text=cleaned_text,
+                bbox=normalized_bbox,
+                page=page_index,
+                font_size=avg_font_size,
+                bold=is_bold,
+                rotation=0,
+                spans=all_inline_spans,
+            )
+        )
+        block_id += 1
+
+    # Sort blocks: primary by y0 (asc), secondary by x0 (asc)
+    blocks.sort(key=lambda b: (b.bbox[1], b.bbox[0]))
+    return blocks, block_id
+
+
 def extract_blocks(document: Document) -> List[Block]:
-    """Extract normalized text blocks from a one-page Document.
+    """Extract normalized text blocks from a Document (first page only for backward compatibility).
 
     - Opens the PDF by path or bytes.
-    - Iterates text blocks, concatenates spans with spacing heuristics, joins lines with "\n".
-    - Returns blocks sorted by (y0, x0) with normalized bbox in [0,1].
+    - Returns blocks from first page only.
+    - For multi-page support, use iter_page_blocks() instead.
     """
     # Open PDF
     if document.path:
@@ -212,93 +305,39 @@ def extract_blocks(document: Document) -> List[Block]:
         raise ValueError("Document must have either path or data set.")
 
     try:
-        if len(doc) != 1:
-            raise ValueError(f"Only 1-page PDFs are supported in MVP0. Found {len(doc)} pages.")
-
+        if len(doc) == 0:
+            return []
+        # Extract first page only for backward compatibility
         page = doc[0]
-        width, height = page.rect.width, page.rect.height
-
-        text_dict = page.get_text("dict")
-        blocks: List[Block] = []
-        block_id = 0
-
-        for block_dict in text_dict.get("blocks", []):
-            if block_dict.get("type") != 0:  # 0 = text block
-                continue
-
-            block_bbox: Optional[Tuple[float, float, float, float]] = None
-            block_line_texts: List[str] = []
-            all_inline_spans: List[InlineSpan] = []
-
-            for line_dict in block_dict.get("lines", []):
-                # Update/expand block bbox
-                line_bbox = tuple(line_dict.get("bbox", block_dict.get("bbox")))  # type: ignore
-                if block_bbox is None:
-                    block_bbox = line_bbox
-                else:
-                    block_bbox = (
-                        min(block_bbox[0], line_bbox[0]),
-                        min(block_bbox[1], line_bbox[1]),
-                        max(block_bbox[2], line_bbox[2]),
-                        max(block_bbox[3], line_bbox[3]),
-                    )
-
-                # Build spans for this line with spacing heuristics
-                span_infos = [_span_info(sd) for sd in line_dict.get("spans", [])]
-                line_text, inline_spans = _concat_line_spans(span_infos)
-                line_text = _clean_text(line_text, preserve_newlines=False)
-
-                # (Optional) simple de-hyphenation across lines: if current line ends with "-",
-                # we will merge with the next line without inserting a space/newline when joining below.
-                block_line_texts.append(line_text)
-                all_inline_spans.extend(inline_spans)
-
-            if block_bbox is None:
-                # Fallback to the block bbox if lines were empty
-                block_bbox = tuple(block_dict.get("bbox", (0, 0, width, height)))  # type: ignore
-
-            # Join lines with newlines, but handle hyphen join (end-with-'-')
-            joined_lines: List[str] = []
-            for i, ln in enumerate(block_line_texts):
-                if i > 0 and joined_lines:
-                    prev = joined_lines[-1]
-                    if prev.endswith("-"):
-                        # remove hyphen and concatenate without space
-                        joined_lines[-1] = prev[:-1] + ln.lstrip()
-                    else:
-                        joined_lines.append("\n" + ln)
-                else:
-                    joined_lines.append(ln)
-            raw_text = "".join(joined_lines)
-
-            cleaned_text = _clean_text(raw_text, preserve_newlines=True)
-            if not cleaned_text:
-                continue
-
-            normalized_bbox = _normalize_bbox(block_bbox, width, height)
-
-            # Bold aggregation & avg font size
-            is_bold = any(sp.bold for sp in all_inline_spans)
-            font_sizes = [sp.font_size for sp in all_inline_spans if sp.font_size is not None]
-            avg_font_size = sum(font_sizes) / len(font_sizes) if font_sizes else None
-
-            blocks.append(
-                Block(
-                    id=block_id,
-                    text=cleaned_text,
-                    bbox=normalized_bbox,
-                    page=0,
-                    font_size=avg_font_size,
-                    bold=is_bold,
-                    rotation=0,
-                    spans=all_inline_spans,
-                )
-            )
-            block_id += 1
-
-        # Sort blocks: primary by y0 (asc), secondary by x0 (asc)
-        blocks.sort(key=lambda b: (b.bbox[1], b.bbox[0]))
+        blocks, _ = _extract_blocks_from_page(page, 0, 0)
         return blocks
+    finally:
+        doc.close()
 
+
+def iter_page_blocks(document: Document) -> Iterator[Tuple[int, List[Block]]]:
+    """Yield (page_index, blocks[]) for each page with bboxes normalized per page.
+
+    Args:
+        document: Document to extract from.
+
+    Yields:
+        Tuple of (page_index, blocks) where blocks have normalized bbox [0,1] for that page.
+    """
+    # Open PDF
+    if document.path:
+        doc = fitz.open(document.path)
+    elif document.data:
+        doc = fitz.open(stream=document.data, filetype="pdf")
+    else:
+        raise ValueError("Document must have either path or data set.")
+
+    try:
+        block_id_counter = 0
+        for page_index in range(len(doc)):
+            page = doc[page_index]
+            blocks, next_block_id = _extract_blocks_from_page(page, page_index, block_id_counter)
+            block_id_counter = next_block_id
+            yield (page_index, blocks)
     finally:
         doc.close()

@@ -45,3 +45,8 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Secrets and local configs
+configs/secrets.yaml
+.env
+.env.local
+

@@ -10,8 +10,9 @@ if TYPE_CHECKING:
 
 # Simple regex patterns for soft validation
 DATE_RE = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b")
-MONEY_RE = re.compile(r"\b(?:R\$)?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\b")
-ID_SIMPLE_RE = re.compile(r"^[A-Za-z0-9\-\.]{3,}$")
+# Improved money regex: accepts 1.234.567,89 and 123,45 formats
+MONEY_RE = re.compile(r"\b(?:R\$)?\s*(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+[.,]\d{2})\b")
+ID_SIMPLE_RE = re.compile(r"(?=[A-Za-z0-9.\-/]*\d)[A-Za-z0-9.\-/]{3,}")  # Must have at least 1 digit
 
 # Hard validation regexes (more strict, for normalization)
 DATE_HARD_RE = re.compile(
@@ -23,19 +24,42 @@ MONEY_HARD_RE = re.compile(
       R\$\s*                             # optional currency
     )?
     (?:
-      \d{1,3}(?:[.,]\d{3})*              # thousand-separated integer
-      |\d+                               # or plain integer
+      \d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})  # thousand-separated with cents: 1.234.567,89
+      |\d{1,3}(?:[.,]\d{3})*[.,]\d{2}     # or: 123,45 or 1.234,56
+      |\d+[.,]\d{2}                       # or: 123,45 (simple format)
     )
-    (?:[.,]\d{2})?                       # optional cents
 """,
     re.VERBOSE,
 )
-ID_SIMPLE_HARD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.\-/]{2,}")  # 3+ chars
-UF_RE = re.compile(r"\b[A-Z]{2}\b")  # Two uppercase letters (UF/state code)
+ID_SIMPLE_HARD_RE = re.compile(r"(?=[A-Za-z0-9.\-/]*\d)[A-Za-z0-9.\-/]{3,}")  # Must have at least 1 digit, 3+ chars
+# UF: exactly 2 uppercase letters as isolated token (word boundary required)
+# Must be word boundary before and after (not part of a longer word)
+UF_RE = re.compile(r"(?<!\w)[A-Z]{2}(?!\w)")  # Two uppercase letters, isolated word
 CEP_RE = re.compile(r"\b(\d{5})-?(\d{3})\b")  # CEP: NNNNN-NNN or NNNNNNNN
 INT_RE = re.compile(r"\b\d+\b")  # Integer
 FLOAT_RE = re.compile(r"\b\d+[.,]\d+\b")  # Float with decimal separator
 PERCENT_RE = re.compile(r"\b(\d+[,.]?\d*)\s*%\b")  # Percent: "12,5%" or "12.5%"
+
+# Brazilian-specific patterns
+CPF_RE = re.compile(r"\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b")  # CPF: 000.000.000-00 or 00000000000
+CNPJ_RE = re.compile(r"\b(\d{2})\.?(\d{3})\.?(\d{3})/?(\d{4})-?(\d{2})\b")  # CNPJ: 00.000.000/0000-00
+EMAIL_RE = re.compile(
+    r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
+)  # Email (basic, not exhaustive)
+PHONE_BR_RE = re.compile(
+    r"\b(?:\+?55\s*)?(?:\(?(\d{2})\)?\s*)?(\d{4,5})-?(\d{4})\b"
+)  # Phone: +55 (11) 91234-5678 or 11912345678
+PLACA_MERCOSUL_RE = re.compile(
+    r"\b([A-Z]{3})(\d)([A-Z])(\d{2})\b"
+)  # Placa Mercosul: AAA1A23
+PLACA_ANTIGA_RE = re.compile(r"\b([A-Z]{3})-?(\d{4})\b")  # Placa antiga: AAA-1234
+CNH_RE = re.compile(r"\b(\d{11})\b")  # CNH: 11 digits
+PIS_PASEP_RE = re.compile(r"\b(\d{3})\.?(\d{5})\.?(\d{2})-?(\d{1})\b")  # PIS/PASEP: 000.00000.00-0
+CHAVE_NF_RE = re.compile(r"\b(\d{44})\b")  # Chave NF: 44 digits
+RG_RE = re.compile(
+    r"\b(\d{1,2})\.?(\d{3})\.?(\d{3})-?(\d{1})\b"
+)  # RG: various formats (light regex, no DV check)
+ALPHANUM_CODE_RE = re.compile(r"(?=[A-Za-z0-9.\-/]*\d)[A-Za-z0-9.\-/]{3,}")  # Alphanumeric with at least 1 digit
 
 
 def validate_soft(field: "SchemaField", raw: str) -> bool:
@@ -99,8 +123,13 @@ def normalize_date(text: str) -> Optional[str]:
 
 
 def normalize_money(text: str) -> Optional[str]:
-    """Normalize money to a dot-decimal string (e.g., 'R$ 1.234,56' -> '1234.56').
+    """Normalize money to a dot-decimal string (e.g., 'R$ 1.234,56' -> '1234.56', '123,45' -> '123.45').
 
+    Handles formats:
+    - 1.234.567,89 (thousands with dots, decimal with comma)
+    - 123,45 (simple format with comma decimal)
+    - 1234.56 (simple format with dot decimal)
+    
     Returns None if no monetary pattern.
     """
     m = MONEY_HARD_RE.search(text)
@@ -108,42 +137,91 @@ def normalize_money(text: str) -> Optional[str]:
         return None
 
     s = m.group(0)
-    s = s.replace("R$", "").strip()
-    # choose decimal separator: if comma present at last 3 chars -> decimal
-    s = s.replace(" ", "")
+    s = s.replace("R$", "").strip().replace(" ", "")
+    
+    # Handle different formats
     if "," in s and "." in s:
-        # assume thousands with '.', decimal with ','
-        s = s.replace(".", "").replace(",", ".")
+        # Format: 1.234.567,89 (thousands with dots, decimal with comma)
+        # Count dots before last comma - if 2+ dots, they're thousand separators
+        last_comma_idx = s.rfind(",")
+        dots_before_comma = s[:last_comma_idx].count(".")
+        
+        if dots_before_comma >= 1:
+            # Thousands format: 1.234.567,89 -> remove dots, replace comma with dot
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            # Ambiguous: assume dot is decimal, comma is thousand (rare but possible)
+            s = s.replace(",", "").replace(".", ".")
     elif "," in s:
-        s = s.replace(",", ".")
-    # keep only digits and one dot
+        # Format: 123,45 or 1.234,56 (simple with comma decimal)
+        # Check if there are dots before comma (thousand separators)
+        last_comma_idx = s.rfind(",")
+        if "." in s[:last_comma_idx]:
+            # Has dots before comma: 1.234,56 -> remove dots, replace comma with dot
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            # No dots: 123,45 -> replace comma with dot
+            s = s.replace(",", ".")
+    elif "." in s:
+        # Format: 1234.56 (simple with dot decimal) - keep as is
+        pass
+    
+    # Extract only digits and one dot
     parts = re.findall(r"\d+|\.", s)
     normalized = "".join(parts)
-    # collapse multiple dots (keep last)
+    
+    # Collapse multiple dots (keep last)
     if normalized.count(".") > 1:
         head, _, tail = normalized.rpartition(".")
         normalized = head.replace(".", "") + "." + tail
-    return normalized if re.match(r"^\d+(\.\d{1,2})?$", normalized) else None
+    
+    # Validate final format: digits with optional .XX (1-2 decimal places)
+    if re.match(r"^\d+(\.\d{1,2})?$", normalized):
+        return normalized
+    
+    return None
 
 
 def normalize_id_simple(text: str) -> Optional[str]:
-    """Extract an id-like token (alnum with .-/, length>=3). Picks the first match."""
+    """Extract an id-like token (alnum with .-/, length>=3, must have at least 1 digit). Picks the first match."""
     m = ID_SIMPLE_HARD_RE.search(text.strip())
     return m.group(0) if m else None
 
 
-def normalize_uf(text: str) -> Optional[str]:
-    """Extract a UF (state code) - exactly 2 uppercase letters.
+def normalize_uf(text: str, context_block: Optional[str] = None) -> Optional[str]:
+    """Extract a UF (state code) - exactly 2 uppercase letters as isolated token.
+    
+    Gate of context: if the same block contains long words (e.g., "SUPLEMENTAR"),
+    the candidate is invalid for UF field.
 
-    Returns None if not found.
+    Args:
+        text: Text to extract UF from.
+        context_block: Optional full block text for context validation.
+        
+    Returns:
+        UF code (2 uppercase letters) or None if not found/invalid.
     """
-    m = UF_RE.search(text.strip().upper())
-    if m:
-        val = m.group(0)
-        # Ensure it's exactly 2 uppercase letters
-        if len(val) == 2 and val.isalpha():
-            return val
-    return None
+    text_upper = text.strip().upper()
+    m = UF_RE.search(text_upper)
+    if not m:
+        return None
+    
+    val = m.group(0)
+    # Ensure it's exactly 2 uppercase letters
+    if len(val) != 2 or not val.isalpha():
+        return None
+    
+    # Gate of context: if block contains long words starting with the UF candidate, reject
+    if context_block:
+        context_upper = context_block.upper()
+        # Look for words that start with the UF code but are longer (e.g., "SUPLEMENTAR" if UF is "SU")
+        # This is a heuristic: if we find a word that starts with the UF and is 4+ chars, it's likely not a UF
+        pattern = re.compile(rf"\b{re.escape(val)}\w{{2,}}", re.IGNORECASE)
+        if pattern.search(context_upper):
+            # Found a word starting with UF but longer - likely not a UF
+            return None
+    
+    return val
 
 
 def validate_text(text: str) -> Tuple[bool, Optional[str]]:
@@ -153,6 +231,47 @@ def validate_text(text: str) -> Tuple[bool, Optional[str]]:
         if line:
             return (True, line)
     return (False, None)
+
+
+def normalize_city(text: str) -> Optional[str]:
+    """Extract city name: tokens with letters (accents ok), size >= 2; reject tokens with only digits.
+    
+    City names should contain at least one letter (may have accents).
+    Pure numeric tokens are rejected (likely CEP or other numeric data).
+    
+    Args:
+        text: Text to extract city name from.
+        
+    Returns:
+        City name (normalized) or None if not valid.
+    """
+    text_clean = text.strip()
+    if not text_clean or len(text_clean) < 2:
+        return None
+    
+    # Reject pure numbers (likely CEP or numeric data)
+    if re.match(r"^\d+$", text_clean):
+        return None
+    
+    # Must contain at least one letter (with or without accents)
+    # Check for letters (including accented characters)
+    if not re.search(r"[A-Za-zÀ-ÿ]", text_clean):
+        return None
+    
+    # Return normalized (trim, but preserve accents)
+    return text_clean
+
+
+def validate_city(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize city name.
+    
+    City names must:
+    - Have at least 2 characters
+    - Contain at least one letter (with or without accents)
+    - Not be pure numbers
+    """
+    val = normalize_city(text)
+    return (val is not None, val)
 
 
 def validate_id_simple(text: str) -> Tuple[bool, Optional[str]]:
@@ -173,9 +292,14 @@ def validate_money(text: str) -> Tuple[bool, Optional[str]]:
     return (val is not None, val)
 
 
-def validate_uf(text: str) -> Tuple[bool, Optional[str]]:
-    """Validate and normalize UF (state code)."""
-    val = normalize_uf(text)
+def validate_uf(text: str, context_block: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize UF (state code) with context gate.
+    
+    Args:
+        text: Text to validate.
+        context_block: Optional full block text for context validation.
+    """
+    val = normalize_uf(text, context_block)
     return (val is not None, val)
 
 
@@ -308,6 +432,265 @@ def validate_enum_with_options(text: str, enum_options: list[str] | None) -> Tup
     return (val is not None, val)
 
 
+def _validate_cpf_dv(cpf_digits: str) -> bool:
+    """Validate CPF check digits."""
+    if len(cpf_digits) != 11:
+        return False
+    if cpf_digits == cpf_digits[0] * 11:  # All same digit
+        return False
+
+    # Calculate first check digit
+    sum1 = sum(int(cpf_digits[i]) * (10 - i) for i in range(9))
+    digit1 = 11 - (sum1 % 11)
+    if digit1 >= 10:
+        digit1 = 0
+
+    if int(cpf_digits[9]) != digit1:
+        return False
+
+    # Calculate second check digit
+    sum2 = sum(int(cpf_digits[i]) * (11 - i) for i in range(10))
+    digit2 = 11 - (sum2 % 11)
+    if digit2 >= 10:
+        digit2 = 0
+
+    return int(cpf_digits[10]) == digit2
+
+
+def normalize_cpf(text: str) -> Optional[str]:
+    """Extract and normalize CPF to ###.###.###-## format.
+
+    Validates check digits.
+    """
+    m = CPF_RE.search(text)
+    if not m:
+        return None
+
+    digits = "".join(m.groups())
+    if len(digits) != 11:
+        return None
+
+    # Validate check digits
+    if not _validate_cpf_dv(digits):
+        return None
+
+    return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
+
+
+def validate_cpf(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize CPF."""
+    val = normalize_cpf(text)
+    return (val is not None, val)
+
+
+def _validate_cnpj_dv(cnpj_digits: str) -> bool:
+    """Validate CNPJ check digits."""
+    if len(cnpj_digits) != 14:
+        return False
+    if cnpj_digits == cnpj_digits[0] * 14:  # All same digit
+        return False
+
+    # Calculate first check digit
+    weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    sum1 = sum(int(cnpj_digits[i]) * weights1[i] for i in range(12))
+    digit1 = sum1 % 11
+    digit1 = 0 if digit1 < 2 else 11 - digit1
+
+    if int(cnpj_digits[12]) != digit1:
+        return False
+
+    # Calculate second check digit
+    weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    sum2 = sum(int(cnpj_digits[i]) * weights2[i] for i in range(13))
+    digit2 = sum2 % 11
+    digit2 = 0 if digit2 < 2 else 11 - digit2
+
+    return int(cnpj_digits[13]) == digit2
+
+
+def normalize_cnpj(text: str) -> Optional[str]:
+    """Extract and normalize CNPJ to ##.###.###/####-## format.
+
+    Validates check digits.
+    """
+    m = CNPJ_RE.search(text)
+    if not m:
+        return None
+
+    digits = "".join(m.groups())
+    if len(digits) != 14:
+        return None
+
+    # Validate check digits
+    if not _validate_cnpj_dv(digits):
+        return None
+
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
+
+
+def validate_cnpj(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize CNPJ."""
+    val = normalize_cnpj(text)
+    return (val is not None, val)
+
+
+def normalize_email(text: str) -> Optional[str]:
+    """Extract and normalize email (lowercase, strip spaces)."""
+    m = EMAIL_RE.search(text)
+    if not m:
+        return None
+
+    email = m.group(0).lower().strip()
+    # Remove any hidden spaces
+    email = email.replace(" ", "").replace("\u200b", "")
+    return email if "@" in email and "." in email.split("@")[1] else None
+
+
+def validate_email(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize email."""
+    val = normalize_email(text)
+    return (val is not None, val)
+
+
+def normalize_phone_br(text: str) -> Optional[str]:
+    """Extract and normalize Brazilian phone to E.164 format (+5511912345678)."""
+    m = PHONE_BR_RE.search(text)
+    if not m:
+        return None
+
+    ddd, part1, part2 = m.groups()
+    if not ddd:
+        ddd = "11"  # Default São Paulo if not provided (could be improved)
+
+    # Normalize to E.164
+    phone = f"+55{ddd}{part1}{part2}"
+    # Validate length (should be 13-14 digits total: +55 + 2 DDD + 8-9 digits)
+    if len(phone) < 13 or len(phone) > 14:
+        return None
+
+    return phone
+
+
+def validate_phone_br(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize Brazilian phone."""
+    val = normalize_phone_br(text)
+    return (val is not None, val)
+
+
+def normalize_placa_mercosul(text: str) -> Optional[str]:
+    """Extract and normalize Mercosul plate (AAA1A23 format, uppercase, no hyphen)."""
+    # Try Mercosul format first
+    m = PLACA_MERCOSUL_RE.search(text.upper())
+    if m:
+        return "".join(m.groups())
+
+    # Try old format
+    m = PLACA_ANTIGA_RE.search(text.upper())
+    if m:
+        return "".join(m.groups())
+
+    return None
+
+
+def validate_placa_mercosul(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize Mercosul plate."""
+    val = normalize_placa_mercosul(text)
+    return (val is not None, val)
+
+
+def normalize_cnh(text: str) -> Optional[str]:
+    """Extract CNH (11 digits)."""
+    m = CNH_RE.search(text)
+    if not m:
+        return None
+
+    digits = m.group(1)
+    if len(digits) != 11:
+        return None
+
+    # Simple validation: check if all same (invalid)
+    if digits == digits[0] * 11:
+        return None
+
+    return digits
+
+
+def validate_cnh(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize CNH."""
+    val = normalize_cnh(text)
+    return (val is not None, val)
+
+
+def normalize_pis_pasep(text: str) -> Optional[str]:
+    """Extract and normalize PIS/PASEP to 000.00000.00-0 format."""
+    m = PIS_PASEP_RE.search(text)
+    if not m:
+        return None
+
+    digits = "".join(m.groups())
+    if len(digits) != 11:
+        return None
+
+    return f"{digits[:3]}.{digits[3:8]}.{digits[8:10]}-{digits[10]}"
+
+
+def validate_pis_pasep(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize PIS/PASEP."""
+    val = normalize_pis_pasep(text)
+    return (val is not None, val)
+
+
+def normalize_chave_nf(text: str) -> Optional[str]:
+    """Extract Chave NF (44 digits)."""
+    m = CHAVE_NF_RE.search(text)
+    if not m:
+        return None
+
+    digits = m.group(1)
+    if len(digits) != 44:
+        return None
+
+    return digits
+
+
+def validate_chave_nf(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize Chave NF."""
+    val = normalize_chave_nf(text)
+    return (val is not None, val)
+
+
+def normalize_rg(text: str) -> Optional[str]:
+    """Extract RG (light validation, no DV check)."""
+    m = RG_RE.search(text)
+    if not m:
+        return None
+
+    # Join digits (format varies, return simplified)
+    digits = "".join(m.groups())
+    if len(digits) < 8 or len(digits) > 9:
+        return None
+
+    return digits
+
+
+def validate_rg(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize RG (light, no DV check)."""
+    val = normalize_rg(text)
+    return (val is not None, val)
+
+
+def normalize_alphanum_code(text: str) -> Optional[str]:
+    """Extract alphanumeric code (at least 1 digit, 3+ chars)."""
+    m = ALPHANUM_CODE_RE.search(text)
+    return m.group(0) if m else None
+
+
+def validate_alphanum_code(text: str) -> Tuple[bool, Optional[str]]:
+    """Validate and normalize alphanumeric code."""
+    val = normalize_alphanum_code(text)
+    return (val is not None, val)
+
+
 # Registry of validators by type
 VALIDATOR_REGISTRY: dict[str, callable] = {
     "text": validate_text,
@@ -316,11 +699,25 @@ VALIDATOR_REGISTRY: dict[str, callable] = {
     "date": validate_date,
     "money": validate_money,
     "uf": validate_uf,
+    "city": validate_city,  # New: city name validator
     "cep": validate_cep,
     "enum": validate_enum_with_options,  # Special: needs enum_options
     "int": validate_int,
     "float": validate_float,
     "percent": validate_percent,
+    # Brazilian-specific validators
+    "cpf": validate_cpf,
+    "cnpj": validate_cnpj,
+    "email": validate_email,
+    "phone_br": validate_phone_br,
+    "placa_mercosul": validate_placa_mercosul,
+    "placa": validate_placa_mercosul,  # Alias
+    "cnh": validate_cnh,
+    "pis_pasep": validate_pis_pasep,
+    "pis": validate_pis_pasep,  # Alias
+    "chave_nf": validate_chave_nf,
+    "rg": validate_rg,
+    "alphanum_code": validate_alphanum_code,
 }
 
 

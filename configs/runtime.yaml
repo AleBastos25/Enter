@@ -1,0 +1,27 @@
+# Runtime configuration for multi-page processing, timeouts, and resource limits
+multi_page: true
+
+timeouts:
+  per_document_seconds: 15.0
+  per_page_seconds: 2.5  # budget per page
+  llm_total_seconds: 4.0  # ceiling for LLM time (if enabled)
+
+limits:
+  max_pages: 32
+  max_blocks_per_page: 3000
+  max_blocks_indexed_per_page: 1500  # for embeddings
+  max_candidates_per_field_page: 6
+  max_total_candidates_per_field: 20
+
+early_stop:
+  # stop when all fields reach minimum confidence
+  min_confidence_per_field: 0.80
+  # skip current page if no "signal" of field appears
+  page_skip_if_no_signal: true
+  page_signal_threshold: 0.35  # semantic: minimum cosine for "has smell"
+  page_signal_topk: 3  # number of blocks to check as "signal"
+
+memory:
+  embedding_eviction_pages: 3  # keep index of only N most recent pages
+  block_text_max_chars: 400
+

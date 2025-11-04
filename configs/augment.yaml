@@ -1,0 +1,38 @@
+# Synthetic Document Factory Configuration
+
+# PDF rendering engine
+engine: "weasyprint"  # Options: weasyprint, wkhtmltopdf
+
+# Generation parameters
+count_per_run: 500
+
+# Layout variations
+columns_k: [1, 2, 3]  # Number of columns to sample from
+relations: ["right_of", "below", "same_block"]  # KV relation modes
+
+# Table parameters
+table:
+  p_use: 0.6  # Probability of using a table
+  grid_with_rules_p: 0.5  # Probability of table with grid lines
+  rows: [2, 12]  # Min, max rows
+  cols: [2, 6]  # Min, max cols
+
+# Noise and perturbations
+noise:
+  enabled: true
+  rotate_deg_max: 2.0  # Maximum rotation in degrees
+  jpeg_quality_range: [35, 90]  # JPEG compression quality range
+  blur_sigma_range: [0.0, 0.8]  # Gaussian blur sigma range
+
+# Typography
+fonts:
+  - "Inter"
+  - "Roboto"
+  - "Times New Roman"
+  - "Arial"
+  - "Liberation Serif"
+
+# Badge positions
+badges:
+  positions: ["bottom-right", "top-right", "bottom-left"]
+

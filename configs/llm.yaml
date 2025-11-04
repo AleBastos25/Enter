@@ -1,0 +1,17 @@
+budget:
+  max_calls_per_pdf: 4
+  max_tokens_per_call: 256
+context:
+  max_chars_candidate_text: 300
+  neighbor_window:
+    include_left_right: true
+    lines_above: 1
+    lines_below: 1
+enabled: true
+model: gpt-5-mini
+provider: openai
+temperature: 0.0
+timeout_seconds: 4.0
+trigger:
+  max_score: 0.8
+  min_score: 0.5

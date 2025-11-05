@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import yaml
 
-from ..embedding.client import create_embedding_client
+# from ..embedding.client import create_embedding_client
 from ..embedding.index import CosineIndex
 from ..embedding.policy import EmbeddingPolicy
 from ..extraction.text_extractor import extract_from_candidate
@@ -19,7 +19,7 @@ from ..layout.builder import build_layout
 from .policy import RuntimePolicy, load_runtime_config
 from ..llm.client import create_client
 from ..llm.policy import LLMPipelinePolicy
-from ..llm.prompts import build_prompt, parse_llm_response
+from ..llm.prompts import build_prompt, build_batch_prompt, parse_llm_response, parse_batch_response
 from ..matching.matcher import match_fields
 from ..tables.detector import detect_tables
 from ..validation.validators import validate_and_normalize
@@ -99,19 +99,62 @@ class Pipeline:
         """Single-page processing (backward compatible)."""
         # 1) Load & blocks (first page only)
         blocks = extract_blocks(doc)
+        
+        # Limit blocks early for speed (máximo 2s por PDF)
+        if len(blocks) > runtime_policy.max_blocks_per_page:
+            blocks = blocks[:runtime_policy.max_blocks_per_page]
 
-        # 2) Layout
+        # 2) Layout (blocks já limitados acima para garantir ≤2s)
         layout = build_layout(doc, blocks)
+        
+        # Check timeout after layout
+        if not runtime_policy.doc_time_left():
+            results = {}
+            for field in schema_fields:
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {"reason": "timeout", "page_index": 0, "notes": "Timeout after layout"},
+                }
+            return {"label": label, "results": results}
 
-        # 2.5) Detect tables
+        # 2.5) Detect tables (limitado para garantir ≤2s)
         pdf_lines = getattr(layout, "pdf_lines", None)
         tables = detect_tables(layout, cfg=None, pdf_lines=pdf_lines)
+        # Limitar número de tabelas para acelerar (máximo 10 tabelas por página)
+        if len(tables) > 10:
+            tables = tables[:10]
         # Attach tables to layout (via setattr since it's a frozen dataclass)
         object.__setattr__(layout, "tables", tables)
+        
+        # Check timeout after table detection
+        if not runtime_policy.doc_time_left():
+            results = {}
+            for field in schema_fields:
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {"reason": "timeout", "page_index": 0, "notes": "Timeout after table detection"},
+                }
+            return {"label": label, "results": results}
 
         # 3) Enrich schema: convert schema_dict -> ExtractionSchema
         enriched = enrich_schema(label, schema_dict)
         schema_fields = enriched.fields
+        
+        # Check timeout after schema enrichment
+        if not runtime_policy.doc_time_left():
+            results = {}
+            for field in schema_fields:
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {"reason": "timeout", "page_index": 0, "notes": "Timeout after schema enrichment"},
+                }
+            return {"label": label, "results": results}
 
         # 3.5) Load pattern memory (if enabled)
         memory_cfg = _load_memory_config()
@@ -123,24 +166,43 @@ class Pipeline:
             store = MemoryStore(memory_cfg.get("store_dir", "data/artifacts/pattern_memory"))
             pattern_memory = PatternMemory(label, memory_cfg, store)
 
-        # 3.6) Semantic seeding (if enabled)
+        # 3.6) Semantic seeding removed - embeddings disabled, using lightweight label matching instead
         semantic_seeds: Dict[str, List[Tuple[int, float]]] = {}
-        embedding_config = _load_embedding_config()
-        if embedding_config.get("enabled", False):
-            semantic_seeds = _build_semantic_seeds(
-                doc, blocks, schema_fields, layout, embedding_config
-            )
+
+        # Check timeout before matching (matching pode ser pesado)
+        if not runtime_policy.doc_time_left():
+            results = {}
+            for field in schema_fields:
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {"reason": "timeout", "page_index": 0, "notes": "Timeout before matching"},
+                }
+            return {"label": label, "results": results}
 
         # 4) Matching (includes table lookup, semantic seeds, and memory; no soft validation needed; hard validators in extraction)
         cands_map = match_fields(
             schema_fields,
             layout,
             validate=None,
-            top_k=self.policy.top_k,
+            top_k=runtime_policy.max_candidates_per_field_page,  # Usar limite do runtime policy
             semantic_seeds=semantic_seeds,
             pattern_memory=pattern_memory,
             memory_cfg=memory_cfg if memory_cfg.get("enabled", False) else None,
         )
+        
+        # Check timeout after matching
+        if not runtime_policy.doc_time_left():
+            results = {}
+            for field in schema_fields:
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {"reason": "timeout", "page_index": 0, "notes": "Timeout after matching"},
+                }
+            return {"label": label, "results": results}
 
         # 4.5) Load LLM config and create client/policy (if enabled)
         llm_config = _load_llm_config()
@@ -164,6 +226,21 @@ class Pipeline:
         used_values_by_type: Dict[str, set[str]] = {}  # type -> set of used values (to avoid duplicates)
 
         for field in schema_fields:
+            # Check timeout before processing each field
+            if not runtime_policy.doc_time_left():
+                # Timeout reached, mark remaining fields as null
+                results[field.name] = {
+                    "value": None,
+                    "confidence": 0.0,
+                    "source": "timeout",
+                    "trace": {
+                        "reason": "timeout",
+                        "page_index": 0,
+                        "notes": "Processing timeout reached",
+                    },
+                }
+                continue
+            
             candidates = cands_map.get(field.name, [])
             field_type = field.type or "text"
 
@@ -177,27 +254,44 @@ class Pipeline:
             }
             trace_candidate: Dict[str, Any] = trace  # Initialize for LLM fallback
 
-            # Try top candidates (increase to 5 to catch global_enum_scan and other relations)
-            for cand in candidates[:5]:
-                # Check if this block was already used by another field
+            # Try top candidates (limitado pelo runtime policy para garantir ≤2s)
+            max_candidates = min(3, runtime_policy.max_candidates_per_field_page)
+            for cand in candidates[:max_candidates]:
+                # Check timeout during candidate processing
+                if not runtime_policy.doc_time_left():
+                    break
+                # v2: Check if Candidate v2 (has text_window already extracted)
+                is_candidate_v2 = isinstance(cand, dict) and "text_window" in cand
+                
+                # Get block_id (works for both Candidate and FieldCandidate)
+                block_id = cand.get("block_id") if isinstance(cand, dict) else cand.node_id
+                relation = cand.get("relation") if isinstance(cand, dict) else cand.relation
+                
                 # Special handling: global_enum_scan and enum fields can reuse blocks if value validates
-                is_enum_scan = cand.relation == "global_enum_scan"
+                is_enum_scan = relation == "global_enum_scan"
                 is_enum_field = field.type == "enum"
                 
-                # Get embed_client if available (for semantic similarity boost)
-                embed_client_for_extraction = None
-                if embedding_config.get("enabled", False):
-                    try:
-                        provider = embedding_config.get("provider", "local")
-                        model_name = embedding_config.get("model", "all-MiniLM-L6-v2")
-                        dim = embedding_config.get("dim", 384)
-                        from ..embedding.client import create_embedding_client
-                        embed_client_for_extraction = create_embedding_client(provider, model_name, dim)
-                    except Exception:
-                        embed_client_for_extraction = None
+                # v2: Use score_tuple for early optimizations
+                if is_candidate_v2:
+                    score_tuple = cand.get("score_tuple", ())
+                    # Skip if type_gate failed (index 2 in score_tuple)
+                    if len(score_tuple) > 2 and score_tuple[2] == 0:
+                        continue  # Skip before extraction
+                    
+                    # Quick preview check for duplicates using text_window
+                    text_window = cand.get("text_window", "")
+                    if text_window:
+                        from ..validation.validators import validate_and_normalize
+                        ok_preview, normalized_preview = validate_and_normalize(field, text_window)
+                        if normalized_preview:
+                            if field_type not in used_values_by_type:
+                                used_values_by_type[field_type] = set()
+                            if normalized_preview in used_values_by_type[field_type]:
+                                continue  # Skip duplicate before extraction
                 
+                # Embeddings disabled - using layout-first approach only
                 value_candidate, conf_candidate, trace_candidate = extract_from_candidate(
-                    field, cand, layout, embed_client=embed_client_for_extraction
+                    field, cand, layout, embed_client=None
                 )
                 
                 if value_candidate is not None:
@@ -211,8 +305,8 @@ class Pipeline:
                         continue
                     
                     # Check if this block was already used by another field
-                    if cand.node_id in used_blocks:
-                        used_field, used_value = used_blocks[cand.node_id]
+                    if block_id in used_blocks:
+                        used_field, used_value = used_blocks[block_id]
                         if used_field != field.name:
                             # If the same exact value is extracted, skip (avoid duplicates)
                             if value_candidate == used_value:
@@ -221,15 +315,18 @@ class Pipeline:
                         
                 if value_candidate is not None:
                     # Check compatibility: if this block was used before, verify type compatibility
-                    if cand.node_id in used_blocks:
-                        used_field, used_value = used_blocks[cand.node_id]
+                    if block_id in used_blocks:
+                        used_field, used_value = used_blocks[block_id]
                         if used_field != field.name:
                             # If normalized values are identical, likely same entity - skip
                             if used_value == value_candidate:
                                 continue
-                            
-                            # For fields of the same type (e.g., both id_simple), avoid reusing same block
-                            # even if values are different (they might be different lines from same block)
+                    
+                    # For fields of the same type (e.g., both id_simple), avoid reusing same block
+                    # even if values are different (they might be different lines from same block)
+                    if block_id in used_blocks:
+                        used_field, used_value = used_blocks[block_id]
+                        if used_field != field.name:
                             used_field_obj = next((f for f in schema_fields if f.name == used_field), None)
                             if used_field_obj and field.type == used_field_obj.type:
                                 # Same type extracting from same block - prefer different blocks to avoid ambiguity
@@ -252,12 +349,19 @@ class Pipeline:
                                 else:
                                     continue
                             
-                            # If types are incompatible, skip
+                            # Check if value would validate for the other field's type
                             used_field_obj = next((f for f in schema_fields if f.name == used_field), None)
                             if used_field_obj:
-                                # Check if value would validate for the other field's type
                                 from ..validation.validators import validate_and_normalize
-
+                                
+                                # Check if this value validates for current field
+                                ok_current, _ = validate_and_normalize(
+                                    field.type or "text",
+                                    value_candidate,
+                                    enum_options=field.meta.get("enum_options") if field.meta else None,
+                                )
+                                
+                                # Check if this value validates for the other field's type
                                 ok_other, _ = validate_and_normalize(
                                     used_field_obj.type or "text",
                                     value_candidate,
@@ -265,37 +369,70 @@ class Pipeline:
                                     if used_field_obj.meta
                                     else None,
                                 )
-                                if not ok_other:
-                                    # This value doesn't work for the other field's type,
-                                    # so it might be okay for this field
-                                    pass
-                                else:
-                                    # Value works for both - likely ambiguous, skip to avoid reuse
-                                    # UNLESS this is an enum field with global_enum_scan
-                                    if not (is_enum_scan and is_enum_field):
-                                        continue
+                                
+                                # If value validates for both fields, prefer the one with better type match
+                                if ok_current and ok_other:
+                                    # Both fields can accept this value - check type compatibility
+                                    if field.type == used_field_obj.type:
+                                        # Same type - prefer higher confidence or first match
+                                        if conf_candidate < 0.90:
+                                            continue  # Lower confidence, skip
+                                    else:
+                                        # Different types but both accept - this is ambiguous
+                                        # Prefer the field where this value is more plausible
+                                        # For now, skip to avoid confusion (can be improved)
+                                        if not (is_enum_scan and is_enum_field):
+                                            continue
+                                elif not ok_current:
+                                    # Value doesn't validate for current field - definitely skip
+                                    continue
+                                elif not ok_other:
+                                    # Value validates for current field but not other - this is good
+                                    pass  # Allow this extraction
 
-                    value = value_candidate
-                    confidence = conf_candidate
-                    # Determine source: "table" if from table, else "heuristic"
-                    source = "table" if cand.relation == "same_table_row" else "heuristic"
-                    trace = trace_candidate
-                    # Mark this block as used
-                    used_blocks[cand.node_id] = (field.name, value_candidate)
-                    # Mark this value as used for this type
-                    used_values_by_type[field_type].add(value_candidate)
+                    if value_candidate is not None:
+                        # Mark block as used
+                        used_blocks[block_id] = (field.name, value_candidate)
+                        used_values_by_type[field_type].add(value_candidate)
+                        
+                        # Update result
+                        value = value_candidate
+                        confidence = conf_candidate
+                        source = "table" if relation in ("same_table_row", "table_row") else "heuristic"
+                        trace = trace_candidate
+                        
+                        # Include relation in trace for fusion
+                        trace["relation"] = relation
+                        
+                        # v2: Include score_tuple in trace for debug
+                        if is_candidate_v2:
+                            trace["score_tuple"] = cand.get("score_tuple")
+                            trace["roi_info"] = cand.get("roi_info", {})
+                        
+                        # v2: Early exit if sufficiency_flag=1 (best candidate found)
+                        if is_candidate_v2:
+                            score_tuple = cand.get("score_tuple", ())
+                            if len(score_tuple) > 0 and score_tuple[0] == 1:  # sufficiency_flag
+                                break  # Best candidate found, stop trying others
+                        
+                        break  # Found valid value, stop trying other candidates
 
                     # Learn from high-confidence extraction (pattern memory)
                     if pattern_memory and memory_cfg.get("enabled", False):
                         learn_cfg = memory_cfg.get("learn", {})
                         min_confidence = learn_cfg.get("min_confidence", 0.85)
                         accept_relations = learn_cfg.get("accept_relations", [])
-                        if confidence >= min_confidence and cand.relation in accept_relations:
+                        
+                        # Get relation and label_block_id (works for both Candidate and FieldCandidate)
+                        cand_relation = relation  # Already extracted above
+                        label_block_id = cand.get("label_block_id") if isinstance(cand, dict) else cand.source_label_block_id
+                        
+                        if confidence >= min_confidence and cand_relation in accept_relations:
                             # Get label and value blocks
                             label_block = next(
-                                (b for b in layout.blocks if b.id == cand.source_label_block_id), None
-                            )
-                            value_block = next((b for b in layout.blocks if b.id == cand.node_id), None)
+                                (b for b in layout.blocks if b.id == label_block_id), None
+                            ) if label_block_id else None
+                            value_block = next((b for b in layout.blocks if b.id == block_id), None)
 
                             if label_block and value_block:
                                 # Build context
@@ -313,7 +450,7 @@ class Pipeline:
                                     field.name,
                                     label_block.text or "",
                                     value_candidate,
-                                    cand.relation,
+                                    cand_relation,
                                     label_block.bbox,
                                     value_block.bbox,
                                     confidence,
@@ -323,18 +460,39 @@ class Pipeline:
                     break
 
             # 5.5) LLM fallback (if enabled and budget allows)
-            # Trigger if no value found OR confidence is low OR score is in gray zone
+            # Check timeout before LLM fallback
             should_use_llm = False
-            if llm_client and llm_policy:
-                # Calculate top score from candidates
+            if not runtime_policy.doc_time_left():
+                # Timeout reached, skip LLM and use current value (or null)
+                should_use_llm = False
+            # Trigger if no value found OR confidence is low OR score is in gray zone
+            elif llm_client and llm_policy:
+                # Calculate top score from candidates (v2: use score_tuple if available)
                 top_score = None
                 if candidates:
                     top_cand = candidates[0]
-                    top_score = (
-                        0.60 * top_cand.scores.get("type", 0.0)
-                        + 0.30 * top_cand.scores.get("spatial", 0.0)
-                        + 0.10 * min(1.0, top_cand.scores.get("semantic", 0.0) / 0.85)
-                    )
+                    # v2: Check if Candidate (has score_tuple)
+                    if isinstance(top_cand, dict) and "score_tuple" in top_cand:
+                        score_tuple = top_cand.get("score_tuple", ())
+                        # Derive score from score_tuple components
+                        # Use type_gate (index 2) and spatial_quality (index 6) as approximation
+                        if len(score_tuple) > 2:
+                            type_gate = score_tuple[2] if len(score_tuple) > 2 else 0
+                            spatial_quality = score_tuple[6] if len(score_tuple) > 6 else 0.5
+                            semantic_boost = score_tuple[8] if len(score_tuple) > 8 else 0
+                            # Approximate score (similar to old calculation)
+                            top_score = (
+                                0.60 * type_gate
+                                + 0.30 * spatial_quality
+                                + 0.10 * min(1.0, semantic_boost / 10.0)
+                            )
+                    else:
+                        # Legacy FieldCandidate
+                        top_score = (
+                            0.60 * top_cand.scores.get("type", 0.0)
+                            + 0.30 * top_cand.scores.get("spatial", 0.0)
+                            + 0.10 * min(1.0, top_cand.scores.get("semantic", 0.0) / 0.85)
+                        )
 
                 # Check if should trigger LLM
                 # Trigger if:
@@ -361,6 +519,9 @@ class Pipeline:
                 elif top_score is not None and llm_policy.min_score <= top_score <= llm_policy.max_score:
                     # Score in gray zone - ambiguous, LLM might help clarify
                     should_use_llm = llm_policy.budget_left()
+                else:
+                    # None of the conditions met, don't use LLM
+                    should_use_llm = False
 
             if should_use_llm:
                 # Build context from evidence (use top candidate if available)
@@ -381,7 +542,8 @@ class Pipeline:
                     # Use full block text (up to 500 chars) instead of just first line
                     if candidates:
                         top_cand = candidates[0]
-                        dst_block = next((b for b in layout.blocks if b.id == top_cand.node_id), None)
+                        top_block_id = top_cand.get("block_id") if isinstance(top_cand, dict) else top_cand.node_id
+                        dst_block = next((b for b in layout.blocks if b.id == top_block_id), None)
                         if dst_block and dst_block.text:
                             # Use first 500 chars of block (may include multiple lines)
                             block_text = dst_block.text[:500]
@@ -396,7 +558,8 @@ class Pipeline:
                 elif candidates:
                     # Fallback: use candidate text with field description
                     top_cand = candidates[0]
-                    dst_block = next((b for b in layout.blocks if b.id == top_cand.node_id), None)
+                    top_block_id = top_cand.get("block_id") if isinstance(top_cand, dict) else top_cand.node_id
+                    dst_block = next((b for b in layout.blocks if b.id == top_block_id), None)
                     context_parts = []
                     if field.description:
                         context_parts.append(f"Field: {field.name}\nDescription: {field.description}")
@@ -414,13 +577,33 @@ class Pipeline:
                         context_text,
                         enum_options=enum_options,
                         regex_hint=field.regex,
+                        field_description=field.description,
                     )
 
-                    # Call LLM
+                    # Check LLM time budget before calling (garantir ≤2s total)
+                    if not runtime_policy.llm_time_left():
+                        # LLM budget exhausted, skip
+                        break
+                    
+                    # Call LLM with aggressive timeout (garantir ≤2s total)
                     max_tokens = llm_config.get("budget", {}).get("max_tokens_per_call", 256)
-                    timeout = llm_config.get("timeout_seconds", 2.0)
+                    # Use remaining LLM budget or config timeout, whichever is smaller
+                    remaining_llm_time = runtime_policy.llm_total_seconds - runtime_policy._llm_time_used
+                    config_timeout = llm_config.get("timeout_seconds", 1.5)
+                    timeout = min(remaining_llm_time, config_timeout)
+                    if timeout <= 0:
+                        break  # No time left
+                    
+                    import time
+                    llm_start = time.monotonic()
                     llm_response = llm_client.generate(prompt, max_tokens=max_tokens, timeout=timeout)
+                    llm_elapsed = time.monotonic() - llm_start
                     llm_policy.note_call()
+                    runtime_policy.note_llm_time(llm_elapsed)
+                    
+                    # Check document timeout after LLM call
+                    if not runtime_policy.doc_time_left():
+                        break
 
                     # Parse response
                     llm_value = parse_llm_response(llm_response)
@@ -449,7 +632,9 @@ class Pipeline:
                             }
                             # Use top candidate node_id for tracking
                             if candidates:
-                                used_blocks[candidates[0].node_id] = (field.name, normalized)
+                                top_cand = candidates[0]
+                                top_block_id = top_cand.get("block_id") if isinstance(top_cand, dict) else top_cand.node_id
+                                used_blocks[top_block_id] = (field.name, normalized)
 
             # Ensure page_index and notes are in trace (for single-page, default to 0)
             if "page_index" not in trace:
@@ -483,9 +668,10 @@ class Pipeline:
                 "candidates_by_field": {
                     field.name: [
                         {
-                            "node_id": cand.node_id,
-                            "relation": cand.relation,
-                            "scores": cand.scores,
+                            "block_id": cand.get("block_id") if isinstance(cand, dict) else cand.node_id,
+                            "relation": cand.get("relation") if isinstance(cand, dict) else cand.relation,
+                            "score_tuple": cand.get("score_tuple") if isinstance(cand, dict) else None,
+                            "scores": cand.get("scores") if isinstance(cand, dict) else cand.scores,
                         }
                         for cand in cands_map.get(field.name, [])[:5]  # Top 5
                     ]
@@ -540,14 +726,8 @@ class Pipeline:
         # Initialize embedding client (if enabled)
         embed_client = None
         embedding_indexes: Dict[int, CosineIndex] = {}  # page_index -> index
-        if embedding_config.get("enabled", False):
-            provider = embedding_config.get("provider", "hash")
-            model_name = embedding_config.get("model", "all-MiniLM-L6-v2")
-            dim = embedding_config.get("dim", 384)
-            try:
-                embed_client = create_embedding_client(provider, model_name, dim)
-            except Exception:
-                embed_client = None
+        # Embeddings disabled - no embedding client needed
+        embed_client = None
 
         # Results per page (for fusion)
         page_results: Dict[int, Dict[str, Dict[str, Any]]] = {}  # page_index -> field_name -> result
@@ -634,8 +814,12 @@ class Pipeline:
                 }
 
                 for cand in candidates[:3]:
-                    if cand.node_id in used_blocks:
-                        used_field, used_value = used_blocks[cand.node_id]
+                    # v2: Get block_id and relation (works for both Candidate and FieldCandidate)
+                    block_id = cand.get("block_id") if isinstance(cand, dict) else cand.node_id
+                    relation = cand.get("relation") if isinstance(cand, dict) else cand.relation
+                    
+                    if block_id in used_blocks:
+                        used_field, used_value = used_blocks[block_id]
                         if used_field != field.name and used_value == value:
                             continue
 
@@ -645,21 +829,23 @@ class Pipeline:
                     if value_candidate is not None:
                         value = value_candidate
                         confidence = conf_candidate
-                        source = "table" if cand.relation == "same_table_row" else "heuristic"
+                        source = "table" if relation in ("same_table_row", "table_row") else "heuristic"
                         # trace_candidate already has page_index from extract_from_candidate, but ensure it matches this page
                         trace = {**trace_candidate, "page_index": page_index}
-                        used_blocks[cand.node_id] = (field.name, value_candidate)
+                        trace["relation"] = relation  # Ensure relation is in trace
+                        used_blocks[block_id] = (field.name, value_candidate)
 
                         # Learn (pattern memory)
                         if pattern_memory and memory_cfg.get("enabled", False):
                             learn_cfg = memory_cfg.get("learn", {})
                             min_confidence = learn_cfg.get("min_confidence", 0.85)
                             accept_relations = learn_cfg.get("accept_relations", [])
-                            if confidence >= min_confidence and cand.relation in accept_relations:
+                            if confidence >= min_confidence and relation in accept_relations:
+                                label_block_id = cand.get("label_block_id") if isinstance(cand, dict) else cand.source_label_block_id
                                 label_block = next(
-                                    (b for b in layout.blocks if b.id == cand.source_label_block_id), None
-                                )
-                                value_block = next((b for b in layout.blocks if b.id == cand.node_id), None)
+                                    (b for b in layout.blocks if b.id == label_block_id), None
+                                ) if label_block_id else None
+                                value_block = next((b for b in layout.blocks if b.id == block_id), None)
                                 if label_block and value_block:
                                     context = {
                                         "section_id": getattr(layout, "section_id_by_block", {}).get(label_block.id),
@@ -672,7 +858,7 @@ class Pipeline:
                                         field.name,
                                         label_block.text or "",
                                         value_candidate,
-                                        cand.relation,
+                                        relation,
                                         label_block.bbox,
                                         value_block.bbox,
                                         confidence,
@@ -926,189 +1112,9 @@ def _build_semantic_seeds(
     Returns:
         Dictionary mapping field_name -> list of (block_id, cosine_score) tuples.
     """
-    # Load embedding client
-    provider = config.get("provider", "hash")
-    model = config.get("model", "all-MiniLM-L6-v2")
-    dim = config.get("dim", 384)
-
-    try:
-        embed_client = create_embedding_client(provider, model, dim)
-    except Exception:
-        # If embedding fails, return empty seeds (no regressions)
-        return {}
-
-    # Load policy
-    policy = EmbeddingPolicy(
-        top_k_per_field=config.get("index", {}).get("top_k_per_field", 4),
-        min_sim_threshold=config.get("index", {}).get("min_sim_threshold", 0.45),
-        max_blocks_considered=config.get("index", {}).get("max_blocks_considered", 2000),
-        max_calls_per_pdf=config.get("budget", {}).get("max_calls_per_pdf", 100),
-        batch_size=config.get("budget", {}).get("batch_size", 64),
-    )
-
-    # Cache setup
-    cache_dir = config.get("cache", {}).get("dir", ".cache/embeddings")
-    cache_enabled = config.get("cache", {}).get("persist", True)
-
-    # Preprocess blocks
-    preproc_config = config.get("preproc", {})
-    block_texts: List[str] = []
-    block_ids: List[int] = []
-    for block in blocks:
-        text = _preprocess_block_text(block.text, preproc_config)
-        if text:  # Skip empty blocks
-            block_texts.append(text)
-            block_ids.append(block.id)
-
-    # Limit blocks if too many
-    if len(block_texts) > policy.max_blocks_considered:
-        # Sample by keeping blocks with more text (prioritize informative blocks)
-        block_with_text = [(len(t), bid) for t, bid in zip(block_texts, block_ids)]
-        block_with_text.sort(reverse=True)
-        selected = block_with_text[: policy.max_blocks_considered]
-        block_ids = [bid for _, bid in selected]
-        # Rebuild block_texts for selected IDs
-        selected_block_ids_set = set(block_ids)
-        block_texts = [t for t, bid in zip(block_texts, block_ids) if bid in selected_block_ids_set]
-        block_ids = [bid for bid in block_ids if bid in selected_block_ids_set]
-
-    if not block_texts:
-        return {}
-
-    # Index blocks (with cache)
-    svd_cfg = config.get("index", {}).get("svd", {})
-    index = CosineIndex(
-        dim=embed_client.dim,
-        svd_enabled=svd_cfg.get("enabled", False),
-        svd_n_components=svd_cfg.get("n_components"),
-        svd_min_size=svd_cfg.get("min_size", 100),
-        svd_variance_threshold=svd_cfg.get("variance_threshold", 0.95),
-    )
-    block_embeddings = []
-
-    # Process blocks in batches
-    for batch_start in range(0, len(block_texts), policy.batch_size):
-        batch_end = min(batch_start + policy.batch_size, len(block_texts))
-        batch_texts = block_texts[batch_start:batch_end]
-        batch_ids = block_ids[batch_start:batch_end]
-
-        # Check cache for each block
-        batch_embs = []
-        needs_embed = []
-        needs_embed_indices = []
-
-        for i, (text, bid) in enumerate(zip(batch_texts, batch_ids)):
-            cache_key = key_for_block(doc.id, bid, model)
-            cached_vec = None
-            if cache_enabled:
-                cached_vec = load_vec(cache_dir, cache_key)
-
-            if cached_vec is not None:
-                vec = cached_vec
-                batch_embs.append(vec)
-            else:
-                needs_embed.append(text)
-                needs_embed_indices.append(i)
-                batch_embs.append(None)
-
-        # Embed missing ones
-        if needs_embed:
-            try:
-                new_embs = embed_client.embed(needs_embed)
-                policy.note_call(len(needs_embed))
-                # Fill in batch_embs
-                for idx, emb in zip(needs_embed_indices, new_embs):
-                    vec = np.array(emb)
-                    batch_embs[idx] = vec
-                    # Save to cache
-                    if cache_enabled:
-                        bid = batch_ids[idx]
-                        cache_key = key_for_block(doc.id, bid, model)
-                        save_vec(cache_dir, cache_key, vec)
-            except Exception:
-                # If embedding fails, skip this batch
-                continue
-
-        # Add to index
-        valid_embs = []
-        valid_ids = []
-        for bid, emb in zip(batch_ids, batch_embs):
-            if emb is not None:
-                valid_embs.append(emb)
-                valid_ids.append(bid)
-
-        if valid_embs:
-            emb_matrix = np.vstack(valid_embs)
-            index.add(valid_ids, emb_matrix)
-
-    # Query per field
-    semantic_seeds: Dict[str, List[Tuple[int, float]]] = {}
-
-    # Get pattern memory if available (for value examples)
-    pattern_memory = None
-    memory_cfg = _load_memory_config()
-    if memory_cfg.get("enabled", False):
-        try:
-            from ..memory.pattern_memory import PatternMemory
-            from ..memory.store import MemoryStore
-            # Get label from first field or use default
-            label = schema_fields[0].name if schema_fields else "default"
-            store = MemoryStore(memory_cfg.get("store_dir", "data/artifacts/pattern_memory"))
-            pattern_memory = PatternMemory(label, memory_cfg, store)
-        except Exception:
-            pattern_memory = None
-    
-    for field in schema_fields:
-        # Build query text
-        query_parts = [field.name, field.description[:100]]  # Truncate description
-        if field.synonyms:
-            query_parts.extend(field.synonyms[:3])  # Top 3 synonyms
-        
-        # Add value examples from pattern memory if available
-        if pattern_memory:
-            value_examples = pattern_memory.get_value_examples(field.name, max_k=2)
-            if value_examples:
-                query_parts.extend([f"example: {ex}" for ex in value_examples])
-        
-        query_text = " ".join(query_parts)
-        query_text = _preprocess_block_text(query_text, preproc_config)
-
-        if not query_text:
-            continue
-
-        # Embed query (with cache)
-        cache_key = key_for_query(field.name, query_text, model)
-        query_vec = None
-        if cache_enabled:
-            cached_query = load_vec(cache_dir, cache_key)
-            if cached_query is not None:
-                query_vec = cached_query
-
-        if query_vec is None:
-            try:
-                query_embs = embed_client.embed([query_text])
-                query_vec = np.array(query_embs[0])
-                policy.note_call(1)
-                if cache_enabled:
-                    save_vec(cache_dir, cache_key, query_vec)
-            except Exception:
-                continue
-        else:
-            query_vec = cached_query
-
-        # Search
-        top_ids, top_scores = index.search(query_vec.reshape(1, -1), top_k=policy.top_k_per_field)
-
-        # Filter by threshold and build seeds
-        seeds: List[Tuple[int, float]] = []
-        for bid, score in zip(top_ids[0], top_scores[0]):
-            if score >= policy.min_sim_threshold:
-                seeds.append((int(bid), float(score)))
-
-        if seeds:
-            semantic_seeds[field.name] = seeds
-
-    return semantic_seeds
+    # Embeddings disabled - return empty seeds (no semantic seeding)
+    # Esta função não é mais usada quando embeddings estão desabilitados
+    return {}
 
 
 def _build_semantic_seeds_per_page(
@@ -1124,152 +1130,18 @@ def _build_semantic_seeds_per_page(
 
     Similar to _build_semantic_seeds but for per-page processing with eviction.
     """
-    # Load policy
-    policy = EmbeddingPolicy(
-        top_k_per_field=config.get("index", {}).get("top_k_per_field", 4),
-        min_sim_threshold=config.get("index", {}).get("min_sim_threshold", 0.45),
-        max_blocks_considered=runtime_policy.max_blocks_indexed_per_page,
-        max_calls_per_pdf=config.get("budget", {}).get("max_calls_per_pdf", 100),
-        batch_size=config.get("budget", {}).get("batch_size", 64),
-    )
-
-    # Cache setup
-    cache_dir = config.get("cache", {}).get("dir", ".cache/embeddings")
-    cache_enabled = config.get("cache", {}).get("persist", True)
-    model_name = config.get("model", "all-MiniLM-L6-v2")
-
-    # Preprocess blocks
-    preproc_config = config.get("preproc", {})
-    block_texts: List[str] = []
-    block_ids: List[int] = []
-    for block in blocks:
-        text = _preprocess_block_text(block.text, preproc_config)
-        if text:
-            block_texts.append(text)
-            block_ids.append(block.id)
-
-    if not block_texts:
-        svd_cfg = config.get("index", {}).get("svd", {})
-        return {}, CosineIndex(
-            dim=embed_client.dim,
-            svd_enabled=svd_cfg.get("enabled", False),
-            svd_n_components=svd_cfg.get("n_components"),
-            svd_min_size=svd_cfg.get("min_size", 100),
-            svd_variance_threshold=svd_cfg.get("variance_threshold", 0.95),
-        )
-
-    # Index blocks (with cache)
+    # Embeddings disabled - return empty seeds and a dummy index
+    # Esta função só é chamada quando embeddings estão habilitados, mas retorna vazio por segurança
+    from ..embedding.index import CosineIndex
     svd_cfg = config.get("index", {}).get("svd", {})
-    index = CosineIndex(
-        dim=embed_client.dim,
+    dummy_index = CosineIndex(
+        dim=384,  # Default dimension
         svd_enabled=svd_cfg.get("enabled", False),
         svd_n_components=svd_cfg.get("n_components"),
         svd_min_size=svd_cfg.get("min_size", 100),
         svd_variance_threshold=svd_cfg.get("variance_threshold", 0.95),
     )
-
-    # Process blocks in batches
-    for batch_start in range(0, len(block_texts), policy.batch_size):
-        batch_end = min(batch_start + policy.batch_size, len(block_texts))
-        batch_texts = block_texts[batch_start:batch_end]
-        batch_ids = block_ids[batch_start:batch_end]
-
-        # Check cache
-        batch_embs = []
-        needs_embed = []
-        needs_embed_indices = []
-
-        for i, (text, bid) in enumerate(zip(batch_texts, batch_ids)):
-            cache_key = key_for_block(doc.id, bid, model_name)
-            cached_vec = None
-            if cache_enabled:
-                cached_vec = load_vec(cache_dir, cache_key)
-
-            if cached_vec is not None:
-                vec = cached_vec
-                batch_embs.append(vec)
-            else:
-                needs_embed.append(text)
-                needs_embed_indices.append(i)
-                batch_embs.append(None)
-
-        # Embed missing ones
-        if needs_embed:
-            try:
-                new_embs = embed_client.embed(needs_embed)
-                policy.note_call(len(needs_embed))
-                for idx, emb in zip(needs_embed_indices, new_embs):
-                    vec = np.array(emb)
-                    batch_embs[idx] = vec
-                    if cache_enabled:
-                        bid = batch_ids[idx]
-                        cache_key = key_for_block(doc.id, bid, model_name)
-                        save_vec(cache_dir, cache_key, vec)
-            except Exception:
-                continue
-
-        # Add to index
-        valid_embs = []
-        valid_ids = []
-        for bid, emb in zip(batch_ids, batch_embs):
-            if emb is not None:
-                valid_embs.append(emb)
-                valid_ids.append(bid)
-
-        if valid_embs:
-            emb_matrix = np.vstack(valid_embs)
-            index.add(valid_ids, emb_matrix)
-
-    # Query per field
-    semantic_seeds: Dict[str, List[Tuple[int, float]]] = {}
-
-    # Get pattern memory if available (for value examples)
-    # Note: label is not available in this function, so we skip pattern memory here
-    # Pattern memory requires label, which is only available at the Pipeline level
-    
-    for field in schema_fields:
-        query_parts = [field.name, field.description[:100]]
-        if field.synonyms:
-            query_parts.extend(field.synonyms[:3])
-        query_text = " ".join(query_parts)
-        query_text = _preprocess_block_text(query_text, preproc_config)
-
-        if not query_text:
-            continue
-
-        # Embed query
-        cache_key = key_for_query(field.name, query_text, model_name)
-        query_vec = None
-        if cache_enabled:
-            cached_query = load_vec(cache_dir, cache_key)
-            if cached_query is not None:
-                query_vec = cached_query
-
-        if query_vec is None:
-            try:
-                query_embs = embed_client.embed([query_text])
-                query_vec = np.array(query_embs[0])
-                policy.note_call(1)
-                if cache_enabled:
-                    save_vec(cache_dir, cache_key, query_vec)
-            except Exception:
-                continue
-        else:
-            query_vec = cached_query
-
-        # Search
-        top_ids, top_scores = index.search(query_vec.reshape(1, -1), top_k=policy.top_k_per_field)
-
-        # Filter by threshold
-        seeds: List[Tuple[int, float]] = []
-        for bid, score in zip(top_ids[0], top_scores[0]):
-            if score >= policy.min_sim_threshold:
-                seeds.append((int(bid), float(score)))
-
-        if seeds:
-            semantic_seeds[field.name] = seeds
-
-    return semantic_seeds, index
+    return {}, dummy_index
 
 
 def _fuse_page_results(

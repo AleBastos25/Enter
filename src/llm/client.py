@@ -114,24 +114,57 @@ class OpenAIClient(LLMClient):
         try:
             # Use threading or async for timeout, but for simplicity, use a try/except
             # In production, you'd use concurrent.futures or similar
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=self.temperature,
-                timeout=timeout,
-            )
-
+            # gpt-5-mini uses max_completion_tokens instead of max_tokens
+            # and doesn't support temperature parameter (only default value 1)
+            create_params = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "timeout": timeout,
+            }
+            if "gpt-5" in self.model:
+                create_params["max_completion_tokens"] = max_tokens
+                # gpt-5-mini doesn't support temperature parameter
+            else:
+                create_params["max_tokens"] = max_tokens
+                create_params["temperature"] = self.temperature
+            
+            # Log para debug
+            import logging
+            logging.debug(f"Chamando OpenAI API com modelo {self.model}, timeout={timeout}s")
+            
+            response = self.client.chat.completions.create(**create_params)
+            
             elapsed = time.time() - start_time
             if elapsed > timeout:
+                import logging
+                logging.warning(f"Timeout atingido após {elapsed:.2f}s (limite: {timeout}s)")
                 return ""
 
             if response.choices and len(response.choices) > 0:
-                return response.choices[0].message.content or ""
+                choice = response.choices[0]
+                # Tentar acessar conteúdo de diferentes formas
+                content = choice.message.content
+                
+                import logging
+                logging.debug(f"Content direto: {repr(content)}")
+                
+                # Se content estiver vazio, tentar usar model_dump (gpt-5-mini pode ter comportamento diferente)
+                if not content:
+                    if hasattr(choice.message, 'model_dump'):
+                        msg_dict = choice.message.model_dump()
+                        content = msg_dict.get('content', '')
+                        logging.debug(f"Content via model_dump: {repr(content[:100]) if content else 'None'}")
+                
+                logging.debug(f"Resposta recebida: {len(response.choices)} choices, conteúdo final: {repr(content[:100]) if content else 'None'}")
+                return content or ""
 
         except Exception as e:
             # Timeout or other error - return empty
-            # In production, you might want to log this
+            # Log the error for debugging
+            import logging
+            logging.error(f"Erro ao chamar OpenAI API: {type(e).__name__}: {e}")
+            import traceback
+            logging.debug(traceback.format_exc())
             return ""
 
         return ""

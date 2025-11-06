@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Optional, Tuple
 if TYPE_CHECKING:
     from ..core.models import SchemaField
 
+from .shape import normalize_for_validation
+
 # Simple regex patterns for soft validation
 DATE_RE = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b")
 # Improved money regex: accepts 1.234.567,89 and 123,45 formats
@@ -68,6 +70,8 @@ def validate_soft(field: "SchemaField", raw: str) -> bool:
     This is a preliminary check during matching; full normalization/validation
     happens later in the extraction step.
 
+    Uses pre-normalization based on field type (v2).
+
     Args:
         field: SchemaField with type information.
         raw: Raw text string to validate.
@@ -76,7 +80,28 @@ def validate_soft(field: "SchemaField", raw: str) -> bool:
         True if raw text appears to match the field type, False otherwise.
     """
     field_type = (field.type or "text").lower()
-    text = raw.strip()
+    
+    # Pre-normalize based on type (v2)
+    normalized_text, original_text = normalize_for_validation(raw, field_type)
+    
+    # For code/sigla/uf fields: check if pattern is isolated_letters (generic, no locale assumptions)
+    if field_type in ("uf", "code", "sigla"):
+        if not normalized_text:
+            return False
+        # Generic check: ensure it's isolated letters (2-4 uppercase letters)
+        # Use pattern-based check instead of hardcoded UF_RE
+        from .patterns import detect_pattern, is_isolated_token
+        pattern = detect_pattern(normalized_text)
+        if pattern == "isolated_letters":
+            # Extract token and check isolation
+            match = re.search(r"\b([A-Z]{2,4})\b", normalized_text.upper())
+            if match:
+                token = match.group(1)
+                return is_isolated_token(normalized_text, token)
+        return False
+    
+    # Use normalized text for validation
+    text = normalized_text if normalized_text else original_text
 
     if field_type == "date":
         return bool(DATE_RE.search(text))
@@ -84,8 +109,9 @@ def validate_soft(field: "SchemaField", raw: str) -> bool:
         return bool(MONEY_RE.search(text))
     if field_type == "id_simple":
         return bool(ID_SIMPLE_RE.search(text))
-    if field_type == "uf":
-        return bool(UF_RE.search(text))
+    if field_type in ("cpf", "cnpj", "cep", "phone"):
+        # After normalization, should be only digits
+        return len(normalized_text) > 0 and normalized_text.isdigit()
     # text: always ok
     return True
 
@@ -391,9 +417,16 @@ def validate_text_multiline(text: str) -> Tuple[bool, Optional[str]]:
 
 
 def normalize_enum(text: str, enum_options: list[str] | None) -> Optional[str]:
-    """Extract enum value by case-insensitive, accent-insensitive matching.
+    """Normalize enum value: case-insensitive, accent-insensitive matching.
 
-    Returns canonical uppercase option if match found.
+    Improved: Better handling of multi-word enum values and partial matches.
+    
+    Args:
+        text: Text to normalize.
+        enum_options: List of valid enum options.
+        
+    Returns:
+        Normalized enum value (exact match from options) or None.
     """
     if not enum_options:
         return None
@@ -405,24 +438,56 @@ def normalize_enum(text: str, enum_options: list[str] | None) -> Optional[str]:
     text_norm = "".join(c for c in text_norm if unicodedata.category(c) != "Mn")
     text_norm = text_norm.upper()
 
-    # Try to match against options
+    # Try to match against options (prioritize exact matches, then substring matches)
+    # First: try exact match (case-insensitive, accent-insensitive)
+    for option in enum_options:
+        option_norm = unicodedata.normalize("NFD", option)
+        option_norm = "".join(c for c in option_norm if unicodedata.category(c) != "Mn")
+        option_norm = option_norm.upper()
+        
+        # Exact match (whole text matches option)
+        if text_norm == option_norm:
+            return option  # Return canonical form
+    
+    # Second: try substring match (option is in text, or text is in option)
+    # This handles cases where enum value appears in larger text
     for option in enum_options:
         option_norm = unicodedata.normalize("NFD", option)
         option_norm = "".join(c for c in option_norm if unicodedata.category(c) != "Mn")
         option_norm = option_norm.upper()
 
-        # Check if text contains option or vice versa
-        if option_norm in text_norm or text_norm in option_norm:
-            # Extract first token that matches
-            tokens = text_clean.split()
-            for token in tokens:
-                token_norm = unicodedata.normalize("NFD", token.upper())
-                token_norm = "".join(
-                    c for c in token_norm if unicodedata.category(c) != "Mn"
-                )
-                if token_norm == option_norm:
-                    return option  # Return canonical form
-
+        # Check if option is contained in text (for multi-word enum values)
+        if option_norm in text_norm:
+            # Extract the matching part (for multi-word enums like "CONSELHO SECCIONAL")
+            # Try to find word boundaries
+            import re
+            # Pattern: word boundary + option + word boundary (or end/start of text)
+            pattern = re.compile(r'\b' + re.escape(option_norm) + r'\b', re.IGNORECASE)
+            if pattern.search(text_clean):
+                return option
+            # Fallback: if option is a substring, return it
+            return option
+        
+        # Check if text is contained in option (for partial matches)
+        if text_norm in option_norm and len(text_norm) >= 3:  # At least 3 chars for partial match
+            # Only accept if text is substantial (not just 1-2 chars)
+            return option
+    
+    # Third: try token-by-token matching (for single-word enum values in multi-word text)
+    tokens = text_clean.split()
+    for token in tokens:
+        if len(token) < 2:  # Skip very short tokens
+            continue
+        token_norm = unicodedata.normalize("NFD", token.upper())
+        token_norm = "".join(c for c in token_norm if unicodedata.category(c) != "Mn")
+        
+        for option in enum_options:
+            option_norm = unicodedata.normalize("NFD", option)
+            option_norm = "".join(c for c in option_norm if unicodedata.category(c) != "Mn")
+            option_norm = option_norm.upper()
+            
+            if token_norm == option_norm:
+                return option  # Return canonical form
     return None
 
 
@@ -734,13 +799,16 @@ def validate_and_normalize(
     Uses the validator registry to find the appropriate validator by field type.
     Falls back to text validator if type is unknown.
 
+    Uses pre-normalization based on field type (v2).
+
     Args:
         field_or_type: SchemaField or type string.
         raw_text: Raw text to validate.
         enum_options: Optional enum options (used only for 'enum' type).
 
     Returns:
-        Tuple of (ok, normalized_value).
+        Tuple of (ok, normalized_value). normalized_value is original_text for output,
+        but validation uses normalized_text.
     """
     if isinstance(field_or_type, str):
         ftype = field_or_type.lower()
@@ -750,11 +818,45 @@ def validate_and_normalize(
         if hasattr(field_or_type, "meta") and enum_options is None:
             enum_options = field_or_type.meta.get("enum_options")
 
+    # Pre-normalize using generic patterns (v2)
+    normalized_text, original_text = normalize_for_validation(raw_text, ftype)
+    
+    # Get validator
     validator = VALIDATOR_REGISTRY.get(ftype, validate_text)
 
-    # Special handling for enum type
+    # For types that expect digits (cpf, cnpj, cep, phone, id_simple, etc.)
+    # Use pattern-based normalization: normalized_text is digits only
+    if ftype in ("cpf", "cnpj", "cep", "phone", "id_simple", "inscricao"):
+        # Normalized should be digits only
+        if not normalized_text or not normalized_text.isdigit():
+            return (False, None)
+        # Use original_text for validator (it has regex patterns that expect formatting)
+        ok, val = validator(original_text)
+        if ok:
+            # Return normalized (digits only) for output
+            return (True, normalized_text)
+        return (False, None)
+    
+    # For money/date, normalization already returns normalized format
+    if ftype in ("money", "date"):
+        if normalized_text != original_text:
+            # Normalization succeeded, use normalized for validation
+            ok, val = validator(normalized_text)
+            if ok:
+                return (True, val)  # Return normalized value
+        # Fallback to original validation
+        return validator(original_text)
+    
+    # For UF/code/sigla, use normalized (isolated letters) for validation
+    if ftype in ("uf", "code", "sigla"):
+        if not normalized_text:
+            return (False, None)
+        return validator(normalized_text)
+    
+    # For enum, special handling
     if ftype == "enum":
-        return validate_enum_with_options(raw_text.strip(), enum_options)
+        return validate_enum_with_options(original_text.strip(), enum_options)
 
-    return validator(raw_text.strip())
+    # For other types, use original text
+    return validator(original_text.strip())
 

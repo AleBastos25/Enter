@@ -11,7 +11,11 @@ from typing import Optional
 import yaml
 
 from ..core.models import Block, Document, LayoutGraph, ReadingNode, SpatialEdge
+from .graph_v2 import build_graph_v2
+from .grid import build_grid
 from .heuristics import detect_columns, detect_paragraphs, detect_sections
+from .style_signature import compute_style_signatures, StyleSignature
+from .role_classifier import classify_role_initial, propagate_role_by_style, RoleType
 
 
 @dataclass
@@ -553,12 +557,40 @@ def build_layout(document: Document, blocks: list[Block]) -> LayoutGraph:
         except Exception:
             pass
 
+    # Build Grid (v2)
+    grid = build_grid(blocks)
+
+    # Build Graph V2 (v2)
+    graph_v2 = build_graph_v2(blocks, grid)
+
+    # Compute style signatures for all blocks
+    style_signatures = compute_style_signatures(blocks)
+
+    # Classify roles (HEADER/LABEL/VALUE) for each block
+    # First, do initial classification (no field-specific hints yet)
+    initial_roles: dict[int, Optional[str]] = {}
+    for block in blocks:
+        role = classify_role_initial(block, layout_graph, field_type=None, style_signature=style_signatures.get(block.id))
+        initial_roles[block.id] = role
+    
+    # Propagate roles by style components
+    block_roles = propagate_role_by_style(
+        blocks,
+        initial_roles,
+        style_signatures,
+        graph_v2,
+    )
+
     # Attach metadata as extra attributes (temporary hack, not in model yet)
     object.__setattr__(layout_graph, "neighborhood", neighborhood)
     object.__setattr__(layout_graph, "column_id_by_block", column_id_by_block)
     object.__setattr__(layout_graph, "section_id_by_block", section_id_by_block)
     object.__setattr__(layout_graph, "paragraph_id_by_block", paragraph_id_by_block)
     object.__setattr__(layout_graph, "line_id_by_block", line_id_by_block)
+    object.__setattr__(layout_graph, "grid", grid)  # v2 Grid
+    object.__setattr__(layout_graph, "graph_v2", graph_v2)  # v2 GraphV2
+    object.__setattr__(layout_graph, "style_signatures", style_signatures)  # Style signatures
+    object.__setattr__(layout_graph, "block_roles", block_roles)  # Block roles (HEADER/LABEL/VALUE)
     if pdf_lines:
         object.__setattr__(layout_graph, "pdf_lines", pdf_lines)
 

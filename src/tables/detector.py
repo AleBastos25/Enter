@@ -7,7 +7,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Optional
 
-from ..core.models import Block, LayoutGraph, ReadingNode, TableCell, TableRow, TableStructure
+from ..core.models import Block, Grid, LayoutGraph, ReadingNode, TableCell, TableRow, TableStructure
 
 
 def _load_table_config() -> dict:
@@ -435,8 +435,198 @@ def _build_grid_cells(
     return cells, rows_out
 
 
+def _detect_tables_with_grid(layout: LayoutGraph, grid: Grid, cfg: dict) -> list[TableStructure]:
+    """Detect tables using Grid (v2): linhas consecutivas com spans consistentes.
+
+    Args:
+        layout: LayoutGraph with blocks.
+        grid: Grid structure.
+        cfg: Config dict.
+
+    Returns:
+        List of TableStructure objects.
+    """
+    tables: list[TableStructure] = []
+    row_y = grid["row_y"]
+    cell_map = grid["cell_map"]
+    spans = grid["spans"]
+    blocks = layout.blocks
+    block_by_id = {b.id: b for b in blocks}
+
+    if len(row_y) < 2:
+        return []
+
+    # Detect tabelas: linhas consecutivas com ≥2 blocos e spans consistentes
+    # Altura média por linha uniforme (z-score < 1.0)
+    table_regions: list[list[int]] = []  # List of row index ranges
+    current_region: list[int] = []
+    
+    for row_idx in range(len(row_y)):
+        # Find blocks in this row
+        row_blocks = [bid for bid, cells in cell_map.items() if any(c[0] == row_idx for c in cells)]
+        
+        # Check if row has ≥2 blocks with spans
+        blocks_with_spans = [bid for bid in row_blocks if bid in spans]
+        
+        if len(row_blocks) >= 2 and len(blocks_with_spans) >= 1:
+            if not current_region:
+                current_region = [row_idx]
+            else:
+                current_region.append(row_idx)
+        else:
+            if len(current_region) >= 2:
+                table_regions.append(current_region)
+            current_region = []
+    
+    # Finalize last region
+    if len(current_region) >= 2:
+        table_regions.append(current_region)
+
+    # Create TableStructure for each region
+    for region in table_regions:
+        if len(region) < 2:
+            continue
+        
+        # Get row indices in this region
+        start_row_idx = region[0]
+        end_row_idx = region[-1]
+        
+        # Collect all blocks in this region
+        region_blocks = []
+        row_heights = []
+        for row_idx in range(start_row_idx, end_row_idx + 1):
+            row_block_ids = [bid for bid, cells in cell_map.items() if any(c[0] == row_idx for c in cells)]
+            row_blocks = [block_by_id[bid] for bid in row_block_ids if bid in block_by_id]
+            if row_blocks:
+                region_blocks.extend(row_blocks)
+                # Calculate row height
+                row_y_min = min(b.bbox[1] for b in row_blocks)
+                row_y_max = max(b.bbox[3] for b in row_blocks)
+                row_heights.append(row_y_max - row_y_min)
+        
+        if not region_blocks:
+            continue
+        
+        # Check uniform height (z-score < 1.0)
+        if len(row_heights) >= 2:
+            mean_height = statistics.mean(row_heights)
+            if mean_height > 0:
+                stdev_height = statistics.stdev(row_heights) if len(row_heights) > 1 else 0.0
+                z_scores = [abs((h - mean_height) / mean_height) if mean_height > 0 else 0.0 for h in row_heights]
+                max_z = max(z_scores) if z_scores else 0.0
+                if max_z >= 1.0:
+                    continue  # Not uniform enough
+        
+        # Get column spans from grid
+        col_x = grid["col_x"]
+        num_cols = len(col_x)
+        
+        # Create cells and rows
+        cells: list[TableCell] = []
+        rows: list[TableRow] = []
+        cell_id = 0
+        row_id = 0
+        
+        for row_idx in range(start_row_idx, end_row_idx + 1):
+            row_block_ids = [bid for bid, cells_in_row in cell_map.items() if any(c[0] == row_idx for c in cells_in_row)]
+            row_blocks = [block_by_id[bid] for bid in row_block_ids if bid in block_by_id]
+            
+            if not row_blocks:
+                continue
+            
+            # Calculate row bbox
+            row_bbox = (
+                min(b.bbox[0] for b in row_blocks),
+                min(b.bbox[1] for b in row_blocks),
+                max(b.bbox[2] for b in row_blocks),
+                max(b.bbox[3] for b in row_blocks),
+            )
+            
+            # Determine if this is header row (first row, or bold/larger font)
+            is_header_row = False
+            if row_idx == start_row_idx:
+                # Check if first row has bold/larger font
+                avg_font = statistics.mean([b.font_size for b in row_blocks if b.font_size]) if row_blocks else 0.0
+                all_fonts = [b.font_size for b in region_blocks if b.font_size]
+                if all_fonts:
+                    mean_font = statistics.mean(all_fonts)
+                    if avg_font > mean_font * 1.1:  # 10% larger
+                        is_header_row = True
+                    # Also check if mostly bold
+                    bold_count = sum(1 for b in row_blocks if b.bold)
+                    if bold_count >= len(row_blocks) * 0.7:  # 70% bold
+                        is_header_row = True
+            
+            row_cell_ids = []
+            
+            # Group blocks by column (using spans)
+            for block_id in row_block_ids:
+                if block_id not in block_by_id:
+                    continue
+                
+                block = block_by_id[block_id]
+                block_cells = cell_map.get(block_id, [])
+                
+                # Get column span
+                span = spans.get(block_id)
+                if span:
+                    first_col, last_col = span
+                else:
+                    # No span, find column from cells
+                    if block_cells:
+                        first_col = min(c[1] for c in block_cells)
+                        last_col = max(c[1] for c in block_cells)
+                    else:
+                        continue
+                
+                # Create cell
+                cell_bbox = block.bbox
+                cell_text = block.text or ""
+                
+                cell = TableCell(
+                    id=cell_id,
+                    row_id=row_id,
+                    col_id=first_col,
+                    bbox=cell_bbox,
+                    block_ids=[block_id],
+                    text=cell_text,
+                    header=is_header_row,
+                )
+                cells.append(cell)
+                row_cell_ids.append(cell_id)
+                cell_id += 1
+            
+            if row_cell_ids:
+                row = TableRow(id=row_id, bbox=row_bbox, cell_ids=row_cell_ids)
+                rows.append(row)
+                row_id += 1
+        
+        if rows and cells:
+            # Create TableStructure
+            table_bbox = (
+                min(c.bbox[0] for c in cells),
+                min(c.bbox[1] for c in cells),
+                max(c.bbox[2] for c in cells),
+                max(c.bbox[3] for c in cells),
+            )
+            
+            table = TableStructure(
+                id=len(tables),
+                type="grid",
+                bbox=table_bbox,
+                rows=rows,
+                cells=cells,
+                col_count=num_cols,
+            )
+            tables.append(table)
+    
+    return tables
+
+
 def detect_tables(layout: LayoutGraph, cfg: Optional[dict] = None, pdf_lines: Optional[dict] = None) -> list[TableStructure]:
     """Detect KV-lists and grid tables in layout.
+
+    Uses Grid (v2) if available, otherwise falls back to classic detection.
 
     Args:
         layout: LayoutGraph with blocks and line nodes.
@@ -451,13 +641,20 @@ def detect_tables(layout: LayoutGraph, cfg: Optional[dict] = None, pdf_lines: Op
 
     tables: list[TableStructure] = []
 
-    # Detect KV-lists
+    # Try Grid-based detection first (v2)
+    grid = getattr(layout, "grid", None)
+    if grid:
+        grid_tables = _detect_tables_with_grid(layout, grid, cfg)
+        if grid_tables:
+            tables.extend(grid_tables)
+
+    # Detect KV-lists (classic)
     kv_tables = _detect_kv_lists(layout, cfg)
     tables.extend(kv_tables)
 
-    # Detect grid tables
-    grid_tables = _detect_grid_tables(layout, cfg, pdf_lines)
-    tables.extend(grid_tables)
+    # Detect grid tables (classic)
+    grid_tables_classic = _detect_grid_tables(layout, cfg, pdf_lines)
+    tables.extend(grid_tables_classic)
 
     return tables
 

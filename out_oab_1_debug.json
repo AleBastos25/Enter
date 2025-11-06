@@ -1,0 +1,357 @@
+{
+  "label": "carteira_oab",
+  "results": {
+    "nome": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    },
+    "inscricao": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    },
+    "seccional": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    },
+    "subsecao": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    },
+    "categoria": {
+      "value": "SUPLEMENTAR",
+      "confidence": 0.85,
+      "source": "heuristic",
+      "trace": {
+        "relation": "global_enum_scan",
+        "block_id": 3,
+        "label_block_id": 3,
+        "score_tuple": [
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          0.5,
+          0,
+          0
+        ],
+        "roi_info": {
+          "relation": "global_enum_scan",
+          "block_id": 3,
+          "label_block_id": 3,
+          "roi_method": "first_line_default",
+          "normalized_value": "SUPLEMENTAR"
+        },
+        "source": "fallback_match_fields",
+        "page_index": 0,
+        "notes": "No evidence found"
+      }
+    },
+    "endereco_profissional": {
+      "value": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista",
+      "confidence": 0.85,
+      "source": "heuristic",
+      "trace": {
+        "relation": "first_below_same_column",
+        "block_id": 5,
+        "label_block_id": 4,
+        "score_tuple": [
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          0.5,
+          0,
+          0
+        ],
+        "roi_info": {
+          "relation": "first_below_same_column",
+          "block_id": 5,
+          "label_block_id": 4,
+          "roi_method": "matched_line",
+          "label_line_idx": 0,
+          "value_line_idx": 0,
+          "col_bonus": 0.08,
+          "sec_bonus": 0.05,
+          "para_bonus": 0.03,
+          "memory_bonus": 0.11
+        },
+        "source": "fallback_match_fields",
+        "page_index": 0,
+        "notes": "No evidence found"
+      }
+    },
+    "telefone_profissional": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    },
+    "situacao": {
+      "value": null,
+      "confidence": 0.0,
+      "source": "none",
+      "trace": {
+        "reason": "no_evidence",
+        "page_index": 0,
+        "notes": "No evidence found for this field"
+      }
+    }
+  },
+  "debug": {
+    "pages_processed": [
+      0
+    ],
+    "blocks_count": 10,
+    "tables_count": 0,
+    "candidates_by_field": {
+      "nome": [
+        {
+          "candidate_id": "pos_0",
+          "block_id": 0,
+          "relation": "position_based",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pos_1",
+          "block_id": 1,
+          "relation": "position_based",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pos_2",
+          "block_id": 2,
+          "relation": "position_based",
+          "pattern_type": "alphanumeric"
+        },
+        {
+          "candidate_id": "pos_3",
+          "block_id": 3,
+          "relation": "position_based",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pos_4",
+          "block_id": 4,
+          "relation": "position_based",
+          "pattern_type": "text"
+        }
+      ],
+      "inscricao": [],
+      "seccional": [],
+      "subsecao": [
+        {
+          "candidate_id": "below_4",
+          "block_id": 4,
+          "relation": "first_below_same_column",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_0",
+          "block_id": 0,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_1",
+          "block_id": 1,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_3",
+          "block_id": 3,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_4",
+          "block_id": 4,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        }
+      ],
+      "categoria": [
+        {
+          "candidate_id": "pattern_0",
+          "block_id": 0,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_1",
+          "block_id": 1,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_3",
+          "block_id": 3,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_4",
+          "block_id": 4,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_6",
+          "block_id": 6,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        }
+      ],
+      "endereco_profissional": [
+        {
+          "candidate_id": "same_block_4",
+          "block_id": 4,
+          "relation": "same_block",
+          "pattern_type": "alphanumeric"
+        },
+        {
+          "candidate_id": "below_5",
+          "block_id": 5,
+          "relation": "first_below_same_column",
+          "pattern_type": "alphanumeric"
+        },
+        {
+          "candidate_id": "pattern_0",
+          "block_id": 0,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_1",
+          "block_id": 1,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_3",
+          "block_id": 3,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        }
+      ],
+      "telefone_profissional": [
+        {
+          "candidate_id": "same_block_4",
+          "block_id": 4,
+          "relation": "same_block",
+          "pattern_type": "alphanumeric"
+        },
+        {
+          "candidate_id": "below_5",
+          "block_id": 5,
+          "relation": "first_below_same_column",
+          "pattern_type": "alphanumeric"
+        },
+        {
+          "candidate_id": "pattern_7",
+          "block_id": 7,
+          "relation": "pattern_scan",
+          "pattern_type": "digits_only"
+        }
+      ],
+      "situacao": [
+        {
+          "candidate_id": "pattern_0",
+          "block_id": 0,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_1",
+          "block_id": 1,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_3",
+          "block_id": 3,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_4",
+          "block_id": 4,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        },
+        {
+          "candidate_id": "pattern_6",
+          "block_id": 6,
+          "relation": "pattern_scan",
+          "pattern_type": "text"
+        }
+      ]
+    },
+    "assignment": {
+      "nome": {
+        "picked_id": "pattern_1",
+        "score": 0.65
+      },
+      "inscricao": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "seccional": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "subsecao": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "categoria": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "endereco_profissional": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "telefone_profissional": {
+        "picked_id": null,
+        "score": 0.0
+      },
+      "situacao": {
+        "picked_id": "pattern_0",
+        "score": 0.65
+      }
+    }
+  }
+}

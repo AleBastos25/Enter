@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 
 __all__ = [
@@ -17,6 +17,9 @@ __all__ = [
     "FieldCandidate",
     "FieldResult",
     "PageContext",
+    "Grid",
+    "GraphV2",
+    "Candidate",
 ]
 
 
@@ -228,12 +231,54 @@ class FieldResult:
 class PageContext:
     """Context for a single page during processing.
 
-    Holds layout graph, embedding index, and semantic signals per field.
+    Holds layout graph (embeddings removed).
     """
 
     page_index: int
     layout: LayoutGraph
-    embedding_index: Optional[Any] = None  # CosineIndex (avoid circular import)
-    signals_by_field: Dict[str, float] = field(default_factory=dict)  # max cosine per field
+    # Embeddings removed - embedding_index and signals_by_field no longer used
+
+
+# ============================================================================
+# v2 Types: Grid, GraphV2, Candidate
+# ============================================================================
+
+
+class Grid(TypedDict):
+    """Virtual grid structure for layout analysis.
+
+    Auto-calibrated grid with spans support.
+    """
+
+    row_y: List[float]  # y-centers of virtual rows
+    col_x: List[Tuple[float, float]]  # column boundaries as [(x0, x1), ...]
+    cell_map: Dict[int, List[Tuple[int, int]]]  # block_id -> [(row_idx, col_idx), ...]
+    spans: Dict[int, Tuple[int, int]]  # block_id -> (first_col, last_col)
+    thresholds: Dict[str, float]  # δ_line, τ_col_iou, etc.
+
+
+class GraphV2(TypedDict):
+    """V2 graph with directional edges and connected components.
+
+    Provides spatial topology beyond simple Grid.
+    """
+
+    adj: Dict[int, Dict[str, List[int]]]  # id -> {'same_line':[...], 'same_col':[...], 'north':[...], 'south':[...], 'east':[...], 'west':[...]}
+    component_id: Dict[int, int]  # block_id -> component_id
+    style: Dict[int, Tuple[float, bool]]  # block_id -> (font_z, bold)
+
+
+class Candidate(TypedDict):
+    """Candidate value for a field with relation and scoring.
+
+    Used in v2 matcher tournament system.
+    """
+
+    block_id: int
+    relation: str  # 'same_line', 'same_col', 'south_of', 'same_block', 'table_row', 'semantic'
+    label_block_id: Optional[int]
+    score_tuple: Tuple  # filled in selector (lexicographic ordering)
+    text_window: str  # raw text (may be multiline/same block)
+    roi_info: Dict[str, Any]  # how ROI was built (for debug)
 
 

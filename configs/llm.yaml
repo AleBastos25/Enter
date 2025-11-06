@@ -1,17 +1,32 @@
 budget:
-  max_calls_per_pdf: 4
+  max_calls_per_pdf: 4  # Start low, increase if needed
   max_tokens_per_call: 256
 context:
   max_chars_candidate_text: 300
   neighbor_window:
-    include_left_right: true
+    include_left_right: false  # Focus on vertical context only
     lines_above: 1
     lines_below: 1
 enabled: true
-model: gpt-5-mini
+model: gpt-5-mini  # Use cheaper model
 provider: openai
 temperature: 0.0
-timeout_seconds: 4.0
+timeout_seconds: 1.5  # Aggressive timeout
 trigger:
-  max_score: 0.8
-  min_score: 0.5
+  max_score: 0.80
+  min_score: 0.50
+
+# v3: Scorer (score matrix in batch)
+scorer:
+  enabled: true
+  model: gpt-5-mini
+  timeout_seconds: 2.0
+  temperature: 0.0
+  batch_per_page: true
+  return: "score_matrix"  # Not value, just affinity
+
+# v3: Retry (directed retry for specific fields)
+retry:
+  enabled: true
+  only_for_fields: ["date", "money", "enum", "alphanum_code", "text"]
+  timeout_seconds: 2.0

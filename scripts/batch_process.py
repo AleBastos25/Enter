@@ -107,28 +107,44 @@ def process_folder(
             
             results.append(result)
         except Exception as e:
+            import traceback
             error_info = {
                 "pdf_name": pdf_name,
                 "pdf_path": str(pdf_path),
                 "label": label,
                 "error": str(e),
                 "error_type": type(e).__name__,
+                "traceback": traceback.format_exc(),
             }
             errors.append(error_info)
             print(f"  ERROR: {e}", file=sys.stderr)
+            if debug:
+                print(traceback.format_exc(), file=sys.stderr)
     
-    # Build consolidated output
-    output = {
-        "folder_path": str(folder_path),
-        "dataset_file": str(dataset_file),
-        "total_pdfs": len(pdf_files),
-        "successful": len(results),
-        "errors": len(errors),
-        "results": results,
-    }
+    # Convert to canonical format: [{"pdf": "...", "label": "...", "result": {"field": value}}]
+    canonical_results = []
+    for result in results:
+        pdf_name = result.get("pdf_name", "unknown.pdf")
+        label = result.get("label", "unknown")
+        results_dict = result.get("results", {})
+        
+        # Extract only values (ignore confidence, source, trace)
+        canonical_result = {}
+        for field_name, field_data in results_dict.items():
+            if isinstance(field_data, dict):
+                value = field_data.get("value")
+            else:
+                value = field_data
+            canonical_result[field_name] = value
+        
+        canonical_results.append({
+            "pdf": pdf_name,
+            "label": label,
+            "result": canonical_result
+        })
     
-    if errors:
-        output["error_details"] = errors
+    # Return canonical format directly (list of results)
+    output = canonical_results
     
     # Save to file if specified
     if output_path:

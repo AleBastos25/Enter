@@ -20,13 +20,24 @@ class LLMPipelinePolicy:
         """Check if there are remaining LLM calls in budget."""
         return self.calls_used < self.max_calls_per_pdf
 
-    def should_trigger(self, field_name: str, top_score: Optional[float], have_value: bool) -> bool:
-        """Determine if LLM fallback should be triggered.
+    def should_trigger(
+        self,
+        field_name: str,
+        top_score: Optional[float],
+        have_value: bool,
+        tie_breaker: bool = False,
+        segmentation_failed: bool = False,
+        llm_success_rate: Optional[float] = None,
+    ) -> bool:
+        """Determine if LLM fallback should be triggered (v2: safe triggers).
 
         Args:
             field_name: Name of the field being extracted.
             top_score: Score of top candidate (None if no candidates).
             have_value: Whether a valid value was already extracted.
+            tie_breaker: True if there's a real tie (top-2 with same score_tuple).
+            segmentation_failed: True if same_block segmentation failed (regex/shape conflict).
+            llm_success_rate: Optional historical LLM success rate for this field.
 
         Returns:
             True if LLM should be called.
@@ -39,11 +50,23 @@ class LLMPipelinePolicy:
         if have_value:
             return False
 
-        # No candidates at all - trigger
+        # v2: Safe triggers
+        # 1. Empate real (top-2 com mesmo score_tuple exceto semantic_boost)
+        if tie_breaker:
+            return True
+
+        # 2. Segmentação same_block falhou (regex dúbio; shape conflitante)
+        if segmentation_failed:
+            return True
+
+        # 3. Histórico indica alto LLM_success_rate no campo
+        if llm_success_rate is not None and llm_success_rate >= 0.7:
+            return True
+
+        # Fallback: original logic (no candidates or gray zone)
         if top_score is None:
             return True
 
-        # Score in gray zone - trigger
         if self.min_score <= top_score <= self.max_score:
             return True
 

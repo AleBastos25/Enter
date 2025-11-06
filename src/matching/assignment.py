@@ -16,7 +16,7 @@ from ..core.models import Block, FieldCandidate, LayoutGraph, SchemaField
 def build_semantic_matrix(
     schema_fields: List[SchemaField],
     blocks: List[Block],
-    semantic_seeds: Optional[Dict[str, List[Tuple[int, float]]]] = None,
+    semantic_seeds: Optional[Dict[str, List[Tuple[int, float]]]] = None,  # Deprecated - embeddings removed
 ) -> np.ndarray:
     """Build semantic similarity matrix from seeds.
 
@@ -32,20 +32,7 @@ def build_semantic_matrix(
     N = len(blocks)
     S_sem = np.zeros((F, N))
 
-    if semantic_seeds is None:
-        return S_sem
-
-    block_id_to_idx = {b.id: idx for idx, b in enumerate(blocks)}
-
-    for f_idx, field in enumerate(schema_fields):
-        field_seeds = semantic_seeds.get(field.name, [])
-        for block_id, cosine_score in field_seeds:
-            if block_id in block_id_to_idx:
-                n_idx = block_id_to_idx[block_id]
-                # Remap from [-1,1] to [0,1] and store
-                score_norm = (cosine_score + 1) / 2
-                S_sem[f_idx, n_idx] = max(S_sem[f_idx, n_idx], score_norm)
-
+    # Embeddings removed - always return zero matrix
     return S_sem
 
 
@@ -427,7 +414,7 @@ def global_assignment(
     schema_fields: List[SchemaField],
     blocks: List[Block],
     layout: LayoutGraph,
-    semantic_seeds: Optional[Dict[str, List[Tuple[int, float]]]] = None,
+    semantic_seeds: Optional[Dict[str, List[Tuple[int, float]]]] = None,  # Deprecated - embeddings removed
     matching_cfg: Optional[Dict] = None,
     method: str = "sinkhorn",
     alpha: float = 0.7,
@@ -460,8 +447,8 @@ def global_assignment(
 
     matching_cfg = matching_cfg or {}
 
-    # Build semantic similarity matrix
-    S_sem = build_semantic_matrix(schema_fields, blocks, semantic_seeds)
+    # Embeddings removed - semantic similarity matrix always zero
+    S_sem = np.zeros((len(schema_fields), len(blocks)))
 
     # Build spatial priors matrix
     P_spatial = build_spatial_priors(schema_fields, blocks, layout, matching_cfg)

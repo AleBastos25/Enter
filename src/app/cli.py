@@ -25,7 +25,7 @@ def main() -> None:
     ap.add_argument("--multi-page", action="store_true", help="Enable multi-page processing")
     ap.add_argument("--llm", action="store_true", help="Enable LLM fallback (default: from config)")
     ap.add_argument("--no-llm", action="store_true", help="Disable LLM fallback")
-    ap.add_argument("--no-embedding", action="store_true", help="Disable embedding-based semantic matching")
+    # Embeddings removed - --no-embedding option no longer needed
     ap.add_argument("--pdf", type=str, help="Path to PDF file (supports multi-page)")
     ap.add_argument("--label", type=str, default="unknown", help="Document label/type")
     ap.add_argument("--schema", type=str, help="Path to schema.json (name->description)")
@@ -129,14 +129,7 @@ def main() -> None:
                     with open(llm_config_path, "w", encoding="utf-8") as f:
                         yaml.safe_dump(llm_config, f)
 
-            if args.no_embedding:
-                embedding_config_path = PathLib("configs/embedding.yaml")
-                if embedding_config_path.exists():
-                    with open(embedding_config_path, "r", encoding="utf-8") as f:
-                        embedding_config = yaml.safe_load(f) or {}
-                    embedding_config["enabled"] = False
-                    with open(embedding_config_path, "w", encoding="utf-8") as f:
-                        yaml.safe_dump(embedding_config, f)
+            # Embeddings removed - no longer needed
 
             if args.multi_page:
                 runtime_config_path = PathLib("configs/runtime.yaml")
@@ -156,15 +149,39 @@ def main() -> None:
             pipe = Pipeline()
             out = pipe.run(args.label, schema_dict, args.pdf, debug=args.debug)
             
-            # Save to file if --out specified
+            # v2: Canonical output - only {field: value/null} for --run
+            if not args.debug:
+                # Extract only field values (no trace)
+                canonical_output = {}
+                results = out.get("results", {})
+                for field_name, field_result in results.items():
+                    canonical_output[field_name] = field_result.get("value")
+                
+                # Save canonical to file if --out specified
             if args.out:
                 output_path = Path(args.out)
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(output_path, "w", encoding="utf-8") as f:
-                    json.dump(out, f, ensure_ascii=False, indent=2)
+                        json.dump(canonical_output, f, ensure_ascii=False, indent=2)
                 print(f"Output saved to: {output_path}", file=sys.stderr)
             
-            # Always print to stdout
+                # Print canonical to stdout
+                print(json.dumps(canonical_output, ensure_ascii=False, indent=2))
+            else:
+                # --debug: show full trace on console (but still save canonical if --out)
+                if args.out:
+                    # Save canonical version to file
+                    canonical_output = {}
+                    results = out.get("results", {})
+                    for field_name, field_result in results.items():
+                        canonical_output[field_name] = field_result.get("value")
+                    output_path = Path(args.out)
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        json.dump(canonical_output, f, ensure_ascii=False, indent=2)
+                    print(f"Canonical output saved to: {output_path}", file=sys.stderr)
+                
+                # Print full trace to console
             print(json.dumps(out, ensure_ascii=False, indent=2))
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)

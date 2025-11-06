@@ -17,10 +17,17 @@ except ImportError:
 class RuntimePolicy:
     """Controls timeouts, early-stop, and resource limits during pipeline execution."""
 
-    # Timeouts
-    per_document_seconds: float = 15.0
-    per_page_seconds: float = 2.5
-    llm_total_seconds: float = 4.0
+    # Timeouts (v2: stricter budgets - máximo 2s por PDF)
+    per_document_seconds: float = 2.0  # Requisito: máximo 2s por PDF
+    per_document_budget_ms: float = 2000.0  # 2s em ms
+    per_page_seconds: float = 1.8  # Budget por página (deixar margem para LLM)
+    llm_total_seconds: float = 1.5  # LLM timeout agressivo (configurado em llm.yaml)
+    
+    # v2: Budgets por etapa (ms)
+    grid_graph_budget_ms: float = 60.0
+    matching_budget_ms: float = 500.0
+    tables_budget_ms: float = 120.0
+    # Embeddings removed - embedding_budget_ms no longer used
 
     # Limits
     max_pages: int = 32
@@ -36,7 +43,6 @@ class RuntimePolicy:
     page_signal_topk: int = 3
 
     # Memory
-    embedding_eviction_pages: int = 3
     block_text_max_chars: int = 400
 
     # Multi-page flag
@@ -124,29 +130,29 @@ def load_runtime_config() -> RuntimePolicy:
     """Load runtime configuration from YAML file, with safe defaults."""
     config_path = Path("configs/runtime.yaml")
 
-    # Defaults (backward compatible: multi_page=false)
+    # Defaults (v2: máximo 2s por PDF)
     defaults = {
         "multi_page": False,
         "timeouts": {
-            "per_document_seconds": 15.0,
-            "per_page_seconds": 2.5,
-            "llm_total_seconds": 4.0,
+            "per_document_seconds": 2.0,  # Requisito: máximo 2s por PDF
+            "per_page_seconds": 1.8,
+            "llm_total_seconds": 1.5,
         },
         "limits": {
-            "max_pages": 32,
-            "max_blocks_per_page": 3000,
-            "max_blocks_indexed_per_page": 1500,
-            "max_candidates_per_field_page": 6,
-            "max_total_candidates_per_field": 20,
+            "max_pages": 1,  # Single-page only for speed
+            "max_blocks_per_page": 2000,  # Reduzido para acelerar
+            "max_blocks_indexed_per_page": 0,  # Embeddings desabilitados
+            "max_candidates_per_field_page": 5,  # Reduzido para acelerar
+            "max_total_candidates_per_field": 15,  # Reduzido para acelerar
         },
         "early_stop": {
-            "min_confidence_per_field": 0.80,
-            "page_skip_if_no_signal": True,
+            "min_confidence_per_field": 0.75,  # Mais permissivo para early-stop mais rápido
+            "page_skip_if_no_signal": False,  # Embeddings desabilitados
             "page_signal_threshold": 0.35,
             "page_signal_topk": 3,
         },
         "memory": {
-            "embedding_eviction_pages": 3,
+            # Embeddings removed
             "block_text_max_chars": 400,
         },
     }
@@ -169,19 +175,19 @@ def load_runtime_config() -> RuntimePolicy:
 
     return RuntimePolicy(
         multi_page=config.get("multi_page", False),
-        per_document_seconds=config.get("timeouts", {}).get("per_document_seconds", 15.0),
-        per_page_seconds=config.get("timeouts", {}).get("per_page_seconds", 2.5),
-        llm_total_seconds=config.get("timeouts", {}).get("llm_total_seconds", 4.0),
-        max_pages=config.get("limits", {}).get("max_pages", 32),
-        max_blocks_per_page=config.get("limits", {}).get("max_blocks_per_page", 3000),
-        max_blocks_indexed_per_page=config.get("limits", {}).get("max_blocks_indexed_per_page", 1500),
-        max_candidates_per_field_page=config.get("limits", {}).get("max_candidates_per_field_page", 6),
-        max_total_candidates_per_field=config.get("limits", {}).get("max_total_candidates_per_field", 20),
-        min_confidence_per_field=config.get("early_stop", {}).get("min_confidence_per_field", 0.80),
-        page_skip_if_no_signal=config.get("early_stop", {}).get("page_skip_if_no_signal", True),
+        per_document_seconds=config.get("timeouts", {}).get("per_document_seconds", 2.0),  # Máximo 2s por PDF
+        per_page_seconds=config.get("timeouts", {}).get("per_page_seconds", 1.8),
+        llm_total_seconds=config.get("timeouts", {}).get("llm_total_seconds", 1.5),
+        max_pages=config.get("limits", {}).get("max_pages", 1),
+        max_blocks_per_page=config.get("limits", {}).get("max_blocks_per_page", 1500),
+        max_blocks_indexed_per_page=config.get("limits", {}).get("max_blocks_indexed_per_page", 0),
+        max_candidates_per_field_page=config.get("limits", {}).get("max_candidates_per_field_page", 3),
+        max_total_candidates_per_field=config.get("limits", {}).get("max_total_candidates_per_field", 10),
+        min_confidence_per_field=config.get("early_stop", {}).get("min_confidence_per_field", 0.75),
+        page_skip_if_no_signal=config.get("early_stop", {}).get("page_skip_if_no_signal", False),
         page_signal_threshold=config.get("early_stop", {}).get("page_signal_threshold", 0.35),
         page_signal_topk=config.get("early_stop", {}).get("page_signal_topk", 3),
-        embedding_eviction_pages=config.get("memory", {}).get("embedding_eviction_pages", 3),
+        # Embeddings removed - embedding_eviction_pages no longer used
         block_text_max_chars=config.get("memory", {}).get("block_text_max_chars", 400),
     )
 

@@ -1,0 +1,474 @@
+{
+  "summary": {
+    "total_pdfs": 6,
+    "processed_pdfs": 6,
+    "missing_pdfs": [],
+    "extra_pdfs": [],
+    "overall_accuracy": 0.40540540540540543,
+    "total_fields": 37,
+    "total_correct": 15,
+    "total_missing": 0,
+    "total_incorrect": 22,
+    "average_pdf_accuracy": 0.44325396825396823
+  },
+  "by_pdf": {
+    "oab_1.pdf": {
+      "pdf": "oab_1.pdf",
+      "label": "carteira_oab",
+      "fields": {
+        "categoria": {
+          "expected": "SUPLEMENTAR",
+          "actual": "SUPLEMENTAR",
+          "match": true,
+          "status": "correct"
+        },
+        "endereco_profissional": {
+          "expected": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista SÃO PAULO - SP",
+          "actual": "Inscrição Seccional Subseção 101943",
+          "match": false,
+          "status": "incorrect"
+        },
+        "inscricao": {
+          "expected": "101943",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "nome": {
+          "expected": "JOANA D'ARC",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "seccional": {
+          "expected": "PR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "situacao": {
+          "expected": "REGULAR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "subsecao": {
+          "expected": "CONSELHO SECCIONAL - PARANÁ",
+          "actual": "Inscrição",
+          "match": false,
+          "status": "incorrect"
+        },
+        "telefone_profissional": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        }
+      },
+      "correct_count": 2,
+      "total_count": 8,
+      "missing_count": 0,
+      "incorrect_count": 6,
+      "extra_count": 0,
+      "accuracy": 0.25
+    },
+    "oab_2.pdf": {
+      "pdf": "oab_2.pdf",
+      "label": "carteira_oab",
+      "fields": {
+        "categoria": {
+          "expected": "SUPLEMENTAR",
+          "actual": "SUPLEMENTAR",
+          "match": true,
+          "status": "correct"
+        },
+        "endereco_profissional": {
+          "expected": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista SÃO PAULO - SP",
+          "actual": "Inscrição Seccional Subseção 101943",
+          "match": false,
+          "status": "incorrect"
+        },
+        "inscricao": {
+          "expected": "101943",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "nome": {
+          "expected": "LUIS FILIPE ARAUJO AMARAL",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "seccional": {
+          "expected": "PR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "situacao": {
+          "expected": "REGULAR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "subsecao": {
+          "expected": "CONSELHO SECCIONAL - PARANÁ",
+          "actual": "Inscrição",
+          "match": false,
+          "status": "incorrect"
+        }
+      },
+      "correct_count": 1,
+      "total_count": 7,
+      "missing_count": 0,
+      "incorrect_count": 6,
+      "extra_count": 0,
+      "accuracy": 0.14285714285714285
+    },
+    "oab_3.pdf": {
+      "pdf": "oab_3.pdf",
+      "label": "carteira_oab",
+      "fields": {
+        "categoria": {
+          "expected": "SUPLEMENTAR",
+          "actual": "SUPLEMENTAR",
+          "match": true,
+          "status": "correct"
+        },
+        "inscricao": {
+          "expected": "101943",
+          "actual": "101943",
+          "match": true,
+          "status": "correct"
+        },
+        "nome": {
+          "expected": "SON GOKU",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "seccional": {
+          "expected": "PR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "situacao": {
+          "expected": "REGULAR",
+          "actual": null,
+          "match": false,
+          "status": "incorrect"
+        },
+        "subsecao": {
+          "expected": "CONSELHO SECCIONAL - PARANÁ",
+          "actual": "101943",
+          "match": false,
+          "status": "incorrect"
+        },
+        "telefone_profissional": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        }
+      },
+      "correct_count": 3,
+      "total_count": 7,
+      "missing_count": 0,
+      "incorrect_count": 4,
+      "extra_count": 0,
+      "accuracy": 0.42857142857142855
+    },
+    "tela_sistema_1.pdf": {
+      "pdf": "tela_sistema_1.pdf",
+      "label": "tela_sistema",
+      "fields": {
+        "data_base": {
+          "expected": "2025-09-05",
+          "actual": "2025-09-05",
+          "match": true,
+          "status": "correct"
+        },
+        "data_verncimento": {
+          "expected": "2025-10-12",
+          "actual": "2025-09-05",
+          "match": false,
+          "status": "incorrect"
+        },
+        "produto": {
+          "expected": null,
+          "actual": "12/10/2025",
+          "match": false,
+          "status": "incorrect"
+        },
+        "quantidade_parcelas": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        },
+        "sistema": {
+          "expected": "CONSIGNADO",
+          "actual": "12/10/2025",
+          "match": false,
+          "status": "incorrect"
+        },
+        "tipo_de_operacao": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        },
+        "tipo_de_sistema": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        }
+      },
+      "correct_count": 4,
+      "total_count": 7,
+      "missing_count": 0,
+      "incorrect_count": 3,
+      "extra_count": 0,
+      "accuracy": 0.5714285714285714
+    },
+    "tela_sistema_2.pdf": {
+      "pdf": "tela_sistema_2.pdf",
+      "label": "tela_sistema",
+      "fields": {
+        "cidade": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        },
+        "pesquisa_por": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        },
+        "pesquisa_tipo": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        },
+        "sistema": {
+          "expected": null,
+          "actual": "2.372,64",
+          "match": false,
+          "status": "incorrect"
+        },
+        "valor_parcela": {
+          "expected": null,
+          "actual": "2372.64",
+          "match": false,
+          "status": "incorrect"
+        }
+      },
+      "correct_count": 3,
+      "total_count": 5,
+      "missing_count": 0,
+      "incorrect_count": 2,
+      "extra_count": 0,
+      "accuracy": 0.6
+    },
+    "tela_sistema_3.pdf": {
+      "pdf": "tela_sistema_3.pdf",
+      "label": "tela_sistema",
+      "fields": {
+        "data_referencia": {
+          "expected": "2021-02-04",
+          "actual": "2021-02-04",
+          "match": true,
+          "status": "correct"
+        },
+        "selecao_de_parcelas": {
+          "expected": null,
+          "actual": "2021-02-04",
+          "match": false,
+          "status": "incorrect"
+        },
+        "total_de_parcelas": {
+          "expected": null,
+          "actual": null,
+          "match": true,
+          "status": "correct"
+        }
+      },
+      "correct_count": 2,
+      "total_count": 3,
+      "missing_count": 0,
+      "incorrect_count": 1,
+      "extra_count": 0,
+      "accuracy": 0.6666666666666666
+    }
+  },
+  "field_stats": {
+    "categoria": {
+      "total": 3,
+      "correct": 3,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "endereco_profissional": {
+      "total": 2,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 2,
+      "extra": 0
+    },
+    "inscricao": {
+      "total": 3,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 2,
+      "extra": 0
+    },
+    "nome": {
+      "total": 3,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 3,
+      "extra": 0
+    },
+    "seccional": {
+      "total": 3,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 3,
+      "extra": 0
+    },
+    "situacao": {
+      "total": 3,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 3,
+      "extra": 0
+    },
+    "subsecao": {
+      "total": 3,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 3,
+      "extra": 0
+    },
+    "telefone_profissional": {
+      "total": 2,
+      "correct": 2,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "data_base": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "data_verncimento": {
+      "total": 1,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 1,
+      "extra": 0
+    },
+    "produto": {
+      "total": 1,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 1,
+      "extra": 0
+    },
+    "quantidade_parcelas": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "sistema": {
+      "total": 2,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 2,
+      "extra": 0
+    },
+    "tipo_de_operacao": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "tipo_de_sistema": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "cidade": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "pesquisa_por": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "pesquisa_tipo": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "valor_parcela": {
+      "total": 1,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 1,
+      "extra": 0
+    },
+    "data_referencia": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    },
+    "selecao_de_parcelas": {
+      "total": 1,
+      "correct": 0,
+      "missing": 0,
+      "incorrect": 1,
+      "extra": 0
+    },
+    "total_de_parcelas": {
+      "total": 1,
+      "correct": 1,
+      "missing": 0,
+      "incorrect": 0,
+      "extra": 0
+    }
+  },
+  "accuracy_by_pdf": {
+    "oab_1.pdf": 0.25,
+    "oab_2.pdf": 0.14285714285714285,
+    "oab_3.pdf": 0.42857142857142855,
+    "tela_sistema_1.pdf": 0.5714285714285714,
+    "tela_sistema_2.pdf": 0.6,
+    "tela_sistema_3.pdf": 0.6666666666666666
+  }
+}

@@ -3,12 +3,219 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
-from ..core.models import Block, FieldCandidate, LayoutGraph, SchemaField
-from ..validation.validators import validate_and_normalize
+from ..core.models import Block, FieldCandidate, GraphV2, Grid, LayoutGraph, SchemaField
+from ..validation.validators import validate_and_normalize, validate_soft
 
 LABEL_SEP_RE = re.compile(r"[:：]\s*")  # ':' variants
+
+
+def _percentile(data: list[float], p: float) -> float:
+    """Compute percentile p (0-100) of data."""
+    if not data:
+        return 0.0
+    sorted_data = sorted(data)
+    idx = int(len(sorted_data) * p / 100.0)
+    idx = min(idx, len(sorted_data) - 1)
+    return sorted_data[idx]
+
+
+def _build_roi_multiline(label_block: Block, grid: Grid, blocks: list[Block]) -> str:
+    """Build multiline ROI anchored at label block.
+
+    Args:
+        label_block: Label block (L).
+        grid: Grid structure.
+        blocks: All blocks in the document.
+
+    Returns:
+        Concatenated text window from ROI respecting reading order (line→column).
+    """
+    # H = (L.bbox.y1 - L.bbox.y0)
+    H = label_block.bbox[3] - label_block.bbox[1]
+
+    # α = clamp(1.2, 1.8); gap_cap = P40(Δy)
+    row_y = grid["row_y"]
+    gaps_y: list[float] = []
+    for i in range(len(row_y) - 1):
+        gaps_y.append(row_y[i + 1] - row_y[i])
+    gap_cap = _percentile(gaps_y, 40) if gaps_y else 0.01
+
+    # y_top = L.bbox.y0; y_bot = min(y_top + α·H, y_top + 2·gap_cap)
+    alpha = min(max(1.2, 1.8), 1.8)  # clamp(1.2, 1.8)
+    y_top = label_block.bbox[1]
+    y_bot = min(y_top + alpha * H, y_top + 2.0 * gap_cap)
+
+    # δ_right = min(0.15, P35(width))
+    block_widths = [b.bbox[2] - b.bbox[0] for b in blocks]
+    delta_right = min(0.15, _percentile(block_widths, 35) if block_widths else 0.15)
+
+    # ROI horizontal: [L.bbox.x0, L.bbox.x1 + δ_right]
+    roi_x0 = label_block.bbox[0]
+    roi_x1 = label_block.bbox[2] + delta_right
+
+    # Agregue linhas virtuais cujo row_y intersecta [y_top, y_bot]
+    intersecting_rows: list[int] = []
+    for row_idx, row_y_val in enumerate(row_y):
+        if y_top <= row_y_val <= y_bot:
+            intersecting_rows.append(row_idx)
+
+    # Encontre blocos que intersectam ROI
+    roi_blocks: list[Block] = []
+    for block in blocks:
+        block_x0, block_y0, block_x1, block_y1 = block.bbox
+        # Check if block intersects ROI
+        if not (block_x1 < roi_x0 or block_x0 > roi_x1 or block_y1 < y_top or block_y0 > y_bot):
+            roi_blocks.append(block)
+
+    # Ordenar por linha→coluna (reading order)
+    # Primeiro por Y, depois por X
+    roi_blocks.sort(key=lambda b: ((b.bbox[1] + b.bbox[3]) / 2.0, (b.bbox[0] + b.bbox[2]) / 2.0))
+
+    # Concatenação respeitando ordem de leitura
+    text_parts: list[str] = []
+    for block in roi_blocks:
+        text_parts.append(block.text)
+
+    text_window = " ".join(text_parts).strip()
+    return text_window
+
+
+def _decide_keep_label(
+    field: SchemaField, label_text: str, text_window: str, graph: Optional[GraphV2]
+) -> Tuple[str, bool]:
+    """Decide whether to keep label in final value.
+
+    Returns:
+        Tuple of (final_value, keep_label_flag).
+    """
+    label_text_lower = label_text.lower().strip()
+    synonyms = field.synonyms or [field.name]
+
+    # Regra 1: Se existe ":" imediatamente após o label, não manter
+    for syn in synonyms:
+        syn_lower = syn.lower().strip()
+        pattern = re.compile(re.escape(syn_lower) + r"\s*[:：]\s*", re.IGNORECASE)
+        if pattern.search(text_window):
+            # Encontra posição após ":"
+            match = pattern.search(text_window)
+            if match:
+                after_colon = text_window[match.end():].strip()
+                if after_colon:
+                    return (after_colon, False)
+
+    # Regra 2: Se não existe ":" e field.type == 'enum' e enum_option ∈ text_window → manter se ≤3 tokens
+    if field.type == "enum":
+        enum_options = field.meta.get("enum_options") if field.meta else None
+        if enum_options:
+            text_tokens = text_window.split()
+            for option in enum_options:
+                if option.lower() in text_window.lower():
+                    # Contar tokens: se label + opção ≤ 3 tokens, manter
+                    label_tokens = label_text.split()
+                    option_tokens = option.split()
+                    total_tokens = len(label_tokens) + len(option_tokens)
+                    if total_tokens <= 3:
+                        return (text_window, True)
+
+    # Regra 3: Se text_window tem tokens curtos UPPER (2–4) e font_z similar → manter
+    if graph:
+        label_block_id = None
+        # Try to find label block (simplified: assume first block with label text)
+        for block_id, style_info in graph.get("style", {}).items():
+            # This is simplified; in practice we'd need to pass label_block_id
+            pass
+
+        text_tokens = text_window.split()
+        upper_tokens = [t for t in text_tokens if t.isupper() and 2 <= len(t) <= 4]
+        if len(upper_tokens) >= 2:
+            # Check font_z similarity (simplified: assume similar if tokens are short UPPER)
+            return (text_window, True)
+
+    # Regra 4: Separar pelo melhor split, mas só se sufixo passar validate_soft(type)
+    # Se não passar, manter tudo (conservador)
+    best_split = None
+    best_syn_len = 0
+
+    for syn in synonyms:
+        syn_lower = syn.lower().strip()
+        if not syn_lower:
+            continue
+        # Try to find synonym in text_window (word boundary preferred)
+        # Try word boundary match first
+        pattern = re.compile(r'\b' + re.escape(syn_lower) + r'\b', re.IGNORECASE)
+        match = pattern.search(text_window.lower())
+        if match:
+            if len(syn) > best_syn_len:
+                best_syn_len = len(syn)
+                # Get text after synonym
+                after_syn = text_window[match.end():].lstrip(" :\u200b\t")
+                if after_syn:
+                    best_split = after_syn
+        else:
+            # Fallback: substring match
+            idx = text_window.lower().find(syn_lower)
+            if idx >= 0:
+                if len(syn) > best_syn_len:
+                    best_syn_len = len(syn)
+                    # Get text after synonym
+                    after_syn = text_window[idx + len(syn):].lstrip(" :\u200b\t")
+                    if after_syn:
+                        best_split = after_syn
+
+    if best_split:
+        # Teste se sufixo passa validate_soft(type)
+        if validate_soft(field, best_split):
+            return (best_split, False)
+        else:
+            # Não passa → manter tudo (conservador)
+            return (text_window, True)
+
+    # Regra 5: Generic label detection and removal (no language-specific assumptions)
+    # Check if text_window is exactly a label or starts with label prefix
+    # Use field synonyms to detect if text_window is just the label
+    text_window_lower = text_window.lower().strip()
+    
+    # Check if text_window is exactly a synonym (just label, no value)
+    for syn in synonyms:
+        syn_lower = syn.lower().strip()
+        if syn_lower and text_window_lower == syn_lower:
+            # Text is exactly the label, reject
+            return ("", False)
+        # Check if text starts with synonym and has no meaningful content after
+        if syn_lower and text_window_lower.startswith(syn_lower):
+            after_label = text_window[len(syn):].lstrip(" :\u200b\t")
+            if len(after_label.strip()) < 2:
+                # Text is just label with minimal text, reject
+                return ("", False)
+            # Check if after_label is just another label word (not a value)
+            after_lower = after_label.lower().strip()
+            # If after_label matches another synonym, it's likely just labels
+            for other_syn in synonyms:
+                if other_syn != syn and other_syn.lower().strip() == after_lower:
+                    return ("", False)
+    
+    # For enum fields: if text_window doesn't contain enum value, reject
+    if field.type == "enum":
+        enum_options = field.meta.get("enum_options") if field.meta else None
+        if enum_options:
+            from ..validation.validators import validate_and_normalize
+            # Check if text_window contains any enum value
+            ok, _ = validate_and_normalize("enum", text_window, enum_options=enum_options)
+            if not ok:
+                # Text doesn't contain enum value, might be just label
+                # Check if it's exactly a label word (match with synonyms)
+                text_tokens = text_window_lower.split()
+                if len(text_tokens) <= 2:
+                    # Short text, check if it matches any synonym
+                    for syn in synonyms:
+                        syn_lower = syn.lower().strip()
+                        if syn_lower in text_tokens or text_window_lower == syn_lower:
+                            return ("", False)
+
+    # Default: manter tudo
+    return (text_window, True)
 
 
 def _text_candidates(
@@ -333,10 +540,10 @@ def _validate_plausibility(field: SchemaField, value: str) -> float:
 
 
 def _parse_structured_block(block_text: str, field: SchemaField) -> Optional[str]:
-    """Try to extract value from structured patterns common in PDFs.
+    """Extract value from structured blocks using generic separators (v2).
     
-    This handles cases where multiple fields are in the same block, e.g.:
-    "Cidade: Mozarlândia U.F .: GO CEP: 76709970"
+    Generic approach: uses common separators (:, -, spaces) and field synonyms
+    to find values, without hardcoding specific patterns for cidade, UF, CEP, etc.
     
     Args:
         block_text: Full text of the block.
@@ -348,250 +555,539 @@ def _parse_structured_block(block_text: str, field: SchemaField) -> Optional[str
     if not block_text or not field:
         return None
     
-    field_name_lower = (field.name or "").lower()
-    field_type = (field.type or "text").lower()
+    from ..validation.patterns import detect_pattern, is_isolated_token, type_gate_generic
     
-    # Pattern for cidade: "Cidade: [City Name] U.F .: [UF] CEP: [CEP]"
-    if "cidade" in field_name_lower:
-        # Try multiple patterns to catch different formats
+    # Build search terms: field name + synonyms
+    search_terms = [field.name or ""]
+    if field.synonyms:
+        search_terms.extend(field.synonyms)
+    
+    # Remove empty terms
+    search_terms = [t.lower() for t in search_terms if t]
+    if not search_terms:
+        return None
+    
+    # Generic separators (no language-specific assumptions)
+    GENERIC_SEPS = r"[:,;•\-–—]"  # Common separators: colon, comma, semicolon, bullet, dash, en-dash, em-dash
+    
+    # Try each search term
+    for term in search_terms:
+        # Pattern: <term><separator><value>
+        # Value ends at: next separator, end of line, or next known label pattern
         patterns = [
-            # Pattern 1: "Cidade: [Name] U.F .: [UF] CEP: [CEP]"
-            re.compile(r"cidade\s*:?\s*([^UuFfCcEePp]+?)(?:\s*(?:U\.?F\.?|UF|CEP|$))", re.IGNORECASE),
-            # Pattern 2: "Cidade: [Name]" (just cidade, no UF/CEP)
-            re.compile(r"cidade\s*:?\s*([^:\n]+?)(?:\s*$|[\n\r])", re.IGNORECASE),
-            # Pattern 3: Look for cidade anywhere and extract following text until UF/CEP
-            re.compile(r"cidade\s*:?\s*([A-Za-zÀ-ÿ\s-]+?)(?:\s*(?:U\.?F\.?|UF|CEP))", re.IGNORECASE),
+            # Pattern 1: "term: value" or "term : value" (colon separator)
+            re.compile(
+                rf"{re.escape(term)}\s*:?\s*([^:\n]+?)(?:\s*(?:$|[\n\r]|{GENERIC_SEPS}))",
+                re.IGNORECASE
+            ),
+            # Pattern 2: "term - value" or "term- value" (dash separator)
+            re.compile(
+                rf"{re.escape(term)}\s*-?\s*([^-\n]+?)(?:\s*(?:$|[\n\r]|{GENERIC_SEPS}))",
+                re.IGNORECASE
+            ),
+            # Pattern 3: "term, value" (comma separator)
+            re.compile(
+                rf"{re.escape(term)}\s*,\s*([^,\n]+?)(?:\s*(?:$|[\n\r]|{GENERIC_SEPS}))",
+                re.IGNORECASE
+            ),
+            # Pattern 4: "term; value" (semicolon separator)
+            re.compile(
+                rf"{re.escape(term)}\s*;\s*([^;\n]+?)(?:\s*(?:$|[\n\r]|{GENERIC_SEPS}))",
+                re.IGNORECASE
+            ),
+            # Pattern 5: "term value" (space-separated, value until next separator or end)
+            re.compile(
+                rf"{re.escape(term)}\s+([^\n]+?)(?:\s*(?:$|[\n\r]|{GENERIC_SEPS}))",
+                re.IGNORECASE
+            ),
         ]
         
         for pattern in patterns:
             match = pattern.search(block_text)
             if match:
-                cidade_name = match.group(1).strip()
-                # Remove trailing punctuation and whitespace
-                cidade_name = re.sub(r'[^\w\sÀ-ÿ-]+$', '', cidade_name).strip()
-                cidade_name = cidade_name.strip(" :\t")
-                # Filter out pure numbers (likely CEP)
-                if cidade_name and len(cidade_name) >= 3 and not re.match(r'^\d+$', cidade_name):
-                    # Ensure it has at least one letter
-                    if re.search(r'[A-Za-zÀ-ÿ]', cidade_name):
-                        return cidade_name
+                value = match.group(1).strip()
+                # Clean up value: remove trailing punctuation, extra whitespace
+                value = re.sub(r'[^\w\sÀ-ÿ-]+$', '', value).strip()
+                value = value.strip(" :\t-")
+                
+                if not value or len(value) < 2:
+                    continue
+                
+                # Type gate: reject if value doesn't match expected type pattern (generic)
+                field_type = (field.type or "text").lower()
+                if not type_gate_generic(value, field_type):
+                    continue  # Skip values that don't match type pattern
+                
+                # For fields expecting isolated letters (uf, code, sigla), verify isolation
+                if field_type in ("uf", "code", "sigla"):
+                    # Check if value looks like isolated letters
+                    isolated_match = re.search(r"\b([A-Z]{2,4})\b", value.upper())
+                    if isolated_match:
+                        token = isolated_match.group(1)
+                        if is_isolated_token(block_text, token):
+                            return token.upper()
+                    continue  # Try next pattern
+                
+                # For text fields: ensure they have at least one letter (not pure numbers/symbols)
+                if field_type == "text":
+                    if not re.search(r'[A-Za-zÀ-ÿ]', value):
+                        continue  # Skip values without letters for text fields
+                
+                return value
     
-    # Pattern for inscricao: "Inscrição: [ID]"
-    if "inscricao" in field_name_lower or field_type == "id_simple":
-        pattern = re.compile(
-            r"inscri[çc][ãa]o\s*:?\s*([A-Z0-9]{3,15})",
-            re.IGNORECASE
-        )
-        match = pattern.search(block_text)
-        if match:
-            inscricao = match.group(1).strip()
-            if inscricao:
-                return inscricao
-    
-    # Pattern for UF/seccional: "U.F .: [UF]" or "Seccional: [UF]"
-    if field_type == "uf" or "seccional" in field_name_lower or "uf" in field_name_lower:
-        pattern = re.compile(
-            r"(?:uf|seccional|u\.?f\.?)\s*:?\s*([A-Z]{2})",
-            re.IGNORECASE
-        )
-        match = pattern.search(block_text)
-        if match:
-            uf = match.group(1).strip().upper()
-            if uf:
-                return uf
-    
-    # Pattern for CEP: "CEP: [CEP]"
-    if "cep" in field_name_lower:
-        pattern = re.compile(
-            r"cep\s*:?\s*(\d{5}-?\d{3}|\d{8})",
-            re.IGNORECASE
-        )
-        match = pattern.search(block_text)
-        if match:
-            cep = match.group(1).strip()
-            if cep:
-                return cep
+    # If no single match found, try to extract from multiple label:value pairs in same line
+    # This handles cases like "Cidade: X UF: Y CEP: Z" in one line (generic, no language assumptions)
+    lines = block_text.splitlines()
+    for line in lines:
+        # Find all potential label:value pairs using generic separators
+        # Pattern: (\w+(?:\s+\w+)*)\s*[:;•\-–—]\s*([^:;•\-–—\n]+)
+        pairs = re.findall(r'(\w+(?:\s+\w+)*)\s*[:;•\-–—]\s*([^:;•\-–—\n]+)', line)
+        if len(pairs) >= 2:  # Multiple pairs in same line
+            # Try to match field name/synonyms with labels in pairs using label matching
+            for label_part, value_part in pairs:
+                label_part_lower = label_part.lower().strip()
+                for syn in search_terms:
+                    syn_lower = syn.lower().strip()
+                    # Simple token overlap check (generic, no language assumptions)
+                    label_tokens = set(label_part_lower.split())
+                    syn_tokens = set(syn_lower.split())
+                    if label_tokens & syn_tokens:  # Any common tokens
+                        value_clean = value_part.strip()
+                        if value_clean and len(value_clean) >= 2:
+                            # Type gate check
+                            if type_gate_generic(value_clean, field_type):
+                                return value_clean
     
     return None
 
 
 def extract_from_candidate(
-    field: SchemaField, cand: FieldCandidate, layout: LayoutGraph, embed_client: Optional[Any] = None
+    field: SchemaField, cand: "FieldCandidate | dict[str, Any]", layout: LayoutGraph
 ) -> tuple[Optional[str], float, dict]:
-    """Given a FieldCandidate, produce a (value, confidence, trace) tuple.
+    """Given a Candidate (v2) or FieldCandidate (legacy), produce a (value, confidence, trace) tuple.
 
-    Generates multiple candidates (lines, windows, tokens) and scores them,
-    returning the best one.
+    v2: Candidate already has text_window extracted, so this function just validates and normalizes.
+    Legacy: FieldCandidate requires text extraction (backward compatibility).
 
     Args:
         field: SchemaField being extracted.
-        cand: FieldCandidate with node_id and relation.
+        cand: Candidate (v2) or FieldCandidate (legacy) with node_id/block_id and relation.
         layout: LayoutGraph with blocks.
 
     Returns:
         Tuple of (value, confidence, trace_dict).
         If no candidate passes validation, returns (None, 0.0, trace_with_reason).
     """
-    # Get destination block
-    dst_block = next((b for b in layout.blocks if b.id == cand.node_id), None)
-    if not dst_block:
-        return None, 0.0, {"node_id": cand.node_id, "relation": cand.relation, "reason": "block_not_found"}
-
-    # Get label block for line-based extraction
-    label_block = None
-    if hasattr(cand, 'source_label_block_id') and cand.source_label_block_id:
-        label_block = next((b for b in layout.blocks if b.id == cand.source_label_block_id), None)
-
-    # For same_block, prioritize splitting by label to avoid extracting labels
-    cand_texts: list[str] = []
-    structured_parse_result = None  # Track if we have a structured parse result
-    if cand.relation == "same_block":
-        # First, try structured parsing for common patterns (e.g., "Cidade: X U.F: Y CEP: Z")
-        structured_value = _parse_structured_block(dst_block.text or "", field)
-        if structured_value:
-            structured_parse_result = structured_value
-            cand_texts.append(structured_value)  # Highest priority
-        
-        # If local_context is provided (e.g., from semantic matching), use it as a candidate
-        # This allows embeddings/LLM to pre-extract values when appropriate
-        if cand.local_context and len(cand.local_context.strip()) >= 3:
-            # Basic check: don't use if it's just a label
-            ctx_lower = cand.local_context.lower().strip()
-            common_labels = ["cidade", "inscricao", "nome", "endereco", "telefone", "seccional"]
-            if ctx_lower not in common_labels:
-                cand_texts.append(cand.local_context.strip())
-        
-        # Try to split by label and use the part after the label as primary candidate
-        # This is critical for same_block: split "SITUAÇÃO REGULAR" -> "REGULAR"
-        primary = _split_by_label(dst_block.text or "", field.synonyms or [field.name])
-        if primary and len(primary.strip()) > 0:
-            cand_texts.append(primary)  # Try first the "after label" part
-        
-        # For enum fields, after split, try to find enum token in the "after label" part
-        if field.type == "enum" and primary:
-            enum_options = field.meta.get("enum_options") if field.meta else None
-            if enum_options:
-                # Try to extract enum value from the split result
-                from ..validation.validators import normalize_enum
-                enum_value = normalize_enum(primary, enum_options)
-                if enum_value:
-                    # Add the normalized enum value as a high-priority candidate
-                    cand_texts.insert(0, enum_value)  # Highest priority for enum
-        
-        # Also try to find the actual value block (right neighbor if available)
-        neighborhood = getattr(layout, "neighborhood", {})
-        nb = neighborhood.get(cand.node_id)
-        if nb and nb.right_on_same_line:
-            right_block = next((b for b in layout.blocks if b.id == nb.right_on_same_line), None)
-            if right_block:
-                # Use right block as candidate (it's likely the value)
-                cand_texts.append(right_block.text.splitlines()[0] if right_block.text else "")
+    from ..core.models import FieldCandidate
+    from ..validation.patterns import type_gate_generic
     
-    # For first_below_same_column with multi-line blocks, try to extract the corresponding line
-    # This helps when labels are in one block and values in another: "Inscrição\nSeccional" -> "101943\nPR"
-    if cand.relation == "first_below_same_column" and label_block and label_block.id != dst_block.id:
-        label_lines = [ln.strip() for ln in label_block.text.splitlines() if ln.strip()]
-        dst_lines = [ln.strip() for ln in dst_block.text.splitlines() if ln.strip()]
+    # Check if v2 Candidate (has text_window)
+    is_candidate_v2 = isinstance(cand, dict) and "text_window" in cand
+    
+    if is_candidate_v2:
+        # v2: Candidate already has text_window extracted
+        candidate: dict[str, Any] = cand  # type: ignore
+        text_window = candidate.get("text_window", "")
+        block_id = candidate.get("block_id")
+        relation = candidate.get("relation", "unknown")
+        label_block_id = candidate.get("label_block_id")
+        score_tuple = candidate.get("score_tuple", ())
+        roi_info = candidate.get("roi_info", {})
         
-        # Find which line of the label block contains this field's label
-        field_name_lower = field.name.lower()
-        field_synonyms_lower = [s.lower().strip() for s in (field.synonyms or [])]
+        # Remove common label prefixes from text_window before validation (generic)
+        # This prevents extracting labels as values
+        text_window_clean = text_window
+        text_window_lower = text_window.lower().strip()
         
-        label_line_idx = None
-        for i, label_line in enumerate(label_lines):
-            label_line_norm = _normalize_text(label_line)
-            # Check if this line contains the field name or synonyms
-            if field_name_lower in label_line_norm:
-                label_line_idx = i
-                break
-            for syn in field_synonyms_lower:
-                if syn and syn in label_line_norm:
-                    label_line_idx = i
+        # Enhanced label-only rejection (corrige erro #1)
+        # Check if text_window is exactly a field synonym (just label, no value) - generic check
+        field_synonyms = field.synonyms or [field.name]
+        
+        # List of known labels that should NEVER be extracted as values
+        KNOWN_LABELS = [
+            "inscrição", "inscricao", "seccional", "subseção", "subsecao",
+            "categoria", "endereço", "endereco", "telefone", "situação", "situacao",
+            "nome", "data", "valor", "sistema", "produto", "conselho seccional",
+            "endereço profissional", "endereco profissional", "telefone profissional"
+        ]
+        
+        # Check 1: Is text_window exactly a known label?
+        if text_window_lower.strip() in [label.lower() for label in KNOWN_LABELS]:
+            return (None, 0.0, {
+                "relation": relation,
+                "block_id": block_id,
+                "reason": "label_only_known_label",
+                "text_window": text_window[:100],
+            })
+        
+        # Check 2: Is text_window exactly a field synonym?
+        for syn in field_synonyms:
+            syn_lower = syn.lower().strip()
+            if syn_lower and text_window_lower == syn_lower:
+                return (None, 0.0, {
+                    "relation": relation,
+                    "block_id": block_id,
+                    "reason": "label_only_field_synonym",
+                    "text_window": text_window[:100],
+                })
+            
+            # Check 3: Is text_window very similar to label (likely just label)
+            if syn_lower:
+                from ..matching.matcher import _label_score
+                label_match_score = _label_score(text_window_lower, syn_lower, min_threshold=0.9)
+                if label_match_score > 0.0 and len(text_window_lower) <= len(syn_lower) + 2:
+                    # Text is very similar to label and short - likely just label
+                    return (None, 0.0, {
+                        "relation": relation,
+                        "block_id": block_id,
+                        "reason": "label_only_similar",
+                        "text_window": text_window[:100],
+                    })
+        
+        # Check 4: Is text_window a sequence of known labels? (e.g., "Inscrição Seccional Subseção")
+        text_words = text_window_lower.split()
+        if len(text_words) <= 3:
+            known_label_count = sum(1 for word in text_words if word in [label.lower() for label in KNOWN_LABELS])
+            if known_label_count >= len(text_words) * 0.7:  # 70% or more are known labels
+                return (None, 0.0, {
+                    "relation": relation,
+                    "block_id": block_id,
+                    "reason": "label_only_sequence",
+                        "text_window": text_window[:100],
+                    })
+        
+        # Remove label prefixes (generic)
+        common_labels_prefix = [
+            "profissional", "endereço profissional", "endereco profissional",
+            "telefone profissional", "endereço", "endereco", "telefone"
+        ]
+        for label in sorted(common_labels_prefix, key=len, reverse=True):
+            if text_window_lower.startswith(label):
+                after_label = text_window[len(label):].lstrip(" :\u200b\t")
+                if len(after_label.strip()) >= 2:
+                    text_window_clean = after_label.strip()
                     break
-            if label_line_idx is not None:
-                break
         
-        # If we found the label line and there's a corresponding value line, prioritize it
-        if label_line_idx is not None and label_line_idx < len(dst_lines):
-            corresponding_line = dst_lines[label_line_idx]
-            if corresponding_line and len(corresponding_line.strip()) > 0:
-                # Add this as the first candidate (highest priority)
-                cand_texts.insert(0, corresponding_line)
+        # Validate and normalize
+        from ..validation.validators import validate_and_normalize
+        
+        ok, normalized_value = validate_and_normalize(field, text_window_clean)
+        
+        if ok and normalized_value:
+            # Calculate confidence from score_tuple
+            # Use type_gate (index 2) and spatial_quality (index 6) as confidence hints
+            confidence = 0.7  # Base confidence
+            if len(score_tuple) > 2 and score_tuple[2] == 1:  # type_gate passed
+                confidence = 0.85
+            if len(score_tuple) > 0 and score_tuple[0] == 1:  # sufficiency_flag
+                confidence = 0.95
+            
+            trace = {
+                "relation": relation,
+                "block_id": block_id,
+                "label_block_id": label_block_id,
+                "score_tuple": score_tuple,
+                "roi_info": roi_info,
+                "source": "heuristic",
+            }
+            return (normalized_value, confidence, trace)
+        else:
+            return (None, 0.0, {
+                "relation": relation,
+                "block_id": block_id,
+                "reason": "validation_failed",
+                "text_window": text_window[:100],
+            })
+    else:
+        # Legacy: FieldCandidate - extract text_window (backward compatibility)
+        field_cand: FieldCandidate = cand  # type: ignore
+        # Get destination block
+        dst_block = next((b for b in layout.blocks if b.id == field_cand.node_id), None)
+        if not dst_block:
+            return None, 0.0, {"node_id": field_cand.node_id, "relation": field_cand.relation, "reason": "block_not_found"}
 
-    # Generate candidates (section-aware for text_multiline)
-    # Skip if same_block and we already have split candidates (to avoid labels)
-    # BUT: if we have a structured parse result, we want to keep it prioritized, so only add generic candidates after
-    if cand.relation != "same_block" or not cand_texts:
-        cands = _text_candidates(dst_block, layout, field.type or "text", max_lines_window=3, max_tokens=12)
-        cand_texts.extend(cands)
-    elif structured_parse_result:
-        # If we have structured parse, still add generic candidates but structured will have much higher score
-        cands = _text_candidates(dst_block, layout, field.type or "text", max_lines_window=3, max_tokens=12)
-        cand_texts.extend(cands)
+        # Get label block for line-based extraction
+        label_block = None
+        if hasattr(field_cand, 'source_label_block_id') and field_cand.source_label_block_id:
+            label_block = next((b for b in layout.blocks if b.id == field_cand.source_label_block_id), None)
 
-    best = (None, 0.0, None)  # (value, score, chosen_text)
+        # Get Grid and GraphV2 (v2) if available
+        grid = getattr(layout, "grid", None)
+        graph_v2 = getattr(layout, "graph_v2", None)
 
-    # Get enum_options from field meta if available
-    enum_options = field.meta.get("enum_options") if field.meta else None
+        # For same_block, use ROI multiline + keep_label (v2)
+        cand_texts: list[str] = []
+        structured_parse_result = None  # Track if we have a structured parse result
+        if field_cand.relation == "same_block" and label_block and grid:
+            # Build ROI multiline
+            text_window = _build_roi_multiline(label_block, grid, layout.blocks)
+            
+            # Decide keep_label
+            label_text = label_block.text or ""
+            final_value, keep_label = _decide_keep_label(field, label_text, text_window, graph_v2)
+            
+            # IMPROVEMENT: Reject titles/headers before adding to candidates
+            # Add final_value as primary candidate
+            if final_value:
+                # Reject if it's a title/header (ends with ":" and is long)
+                if final_value.strip().endswith(":") and len(final_value.strip()) > 10:
+                    title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                    final_lower = final_value.lower().strip()
+                    if any(indicator in final_lower for indicator in title_indicators):
+                        # Skip - it's a title/header
+                        pass
+                    else:
+                        cand_texts.append(final_value)
+                else:
+                    cand_texts.append(final_value)
+            
+            # Also try structured parsing as fallback (for patterns like "Cidade: X U.F: Y CEP: Z")
+            structured_value = _parse_structured_block(dst_block.text or "", field)
+            if structured_value:
+                structured_parse_result = structured_value
+                cand_texts.append(structured_value)  # High priority
+        elif field_cand.relation == "same_block":
+            # Fallback: old logic if Grid not available
+            # First, try structured parsing for common patterns (e.g., "Cidade: X U.F: Y CEP: Z")
+            structured_value = _parse_structured_block(dst_block.text or "", field)
+            if structured_value:
+                structured_parse_result = structured_value
+                cand_texts.append(structured_value)  # Highest priority
+            
+            # Try to split by label and use the part after the label as primary candidate
+            primary = _split_by_label(dst_block.text or "", field.synonyms or [field.name])
+            if primary and len(primary.strip()) > 0:
+                # IMPROVEMENT: Reject titles/headers before adding to candidates
+                if primary.strip().endswith(":") and len(primary.strip()) > 10:
+                    title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                    primary_lower = primary.lower().strip()
+                    if any(indicator in primary_lower for indicator in title_indicators):
+                        # Skip - it's a title/header
+                        pass
+                    else:
+                        cand_texts.append(primary)  # Try first the "after label" part
+                else:
+                    cand_texts.append(primary)  # Try first the "after label" part
+            
+            # For enum fields, after split, try to find enum token in the "after label" part
+            if field.type == "enum" and primary:
+                enum_options = field.meta.get("enum_options") if field.meta else None
+                if enum_options:
+                    # Try to extract enum value from the split result
+                    from ..validation.validators import normalize_enum
+                    enum_value = normalize_enum(primary, enum_options)
+                    if enum_value:
+                        # Add the normalized enum value as a high-priority candidate
+                        cand_texts.insert(0, enum_value)  # Highest priority for enum
+            
+            # Also try to find the actual value block (right neighbor if available)
+            neighborhood = getattr(layout, "neighborhood", {})
+            nb = neighborhood.get(field_cand.node_id)
+            if nb and nb.right_on_same_line:
+                right_block = next((b for b in layout.blocks if b.id == nb.right_on_same_line), None)
+                if right_block:
+                    # Use right block as candidate (it's likely the value)
+                    right_text = right_block.text.splitlines()[0] if right_block.text else ""
+                    # IMPROVEMENT: Reject titles/headers before adding to candidates
+                    if right_text.strip().endswith(":") and len(right_text.strip()) > 10:
+                        title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                        right_lower = right_text.lower().strip()
+                        if any(indicator in right_lower for indicator in title_indicators):
+                            # Skip - it's a title/header
+                            pass
+                        else:
+                            cand_texts.append(right_text)
+                    else:
+                        cand_texts.append(right_text)
+        
+        # For first_below_same_column with multi-line blocks, try to extract the corresponding line
+        # This helps when labels are in one block and values in another: "Inscrição\nSeccional" -> "101943\nPR"
+        # IMPROVEMENT: Also handles same_block relations with multi-line blocks
+        is_multiline_relation = field_cand.relation in ["first_below_same_column", "same_block"]
+        
+        if is_multiline_relation and label_block:
+            label_lines = [ln.strip() for ln in (label_block.text or "").splitlines() if ln.strip()]
+            dst_lines = [ln.strip() for ln in (dst_block.text or "").splitlines() if ln.strip()]
+            
+            # Find which line of the label block contains this field's label
+            field_name_lower = field.name.lower()
+            field_synonyms_lower = [s.lower().strip() for s in (field.synonyms or [])]
+            
+            label_line_idx = None
+            for i, label_line in enumerate(label_lines):
+                label_line_norm = _normalize_text(label_line)
+                # Check if this line contains the field name or synonyms (word boundary match)
+                import re
+                if field_name_lower:
+                    pattern = r'\b' + re.escape(field_name_lower) + r'\b'
+                    if re.search(pattern, label_line_norm):
+                        label_line_idx = i
+                        break
+                for syn in field_synonyms_lower:
+                    if syn:
+                        pattern = r'\b' + re.escape(syn) + r'\b'
+                        if re.search(pattern, label_line_norm):
+                            label_line_idx = i
+                            break
+                if label_line_idx is not None:
+                    break
+            
+            # If we found the label line and there's a corresponding value line, extract it
+            if label_line_idx is not None and label_line_idx < len(dst_lines):
+                # Extract the corresponding line from value block
+                value_line = dst_lines[label_line_idx]
+                if value_line:
+                    # Clean the value line (remove common prefixes/suffixes)
+                    value_clean = value_line.strip()
+                    
+                    # Additional processing: if value line contains multiple tokens that might be
+                    # part of the value, try to extract the most relevant part
+                    # For structured data like "101943\nPR\nCONSELHO SECCIONAL - PARANÁ",
+                    # we want just "101943" for inscricao, "PR" for seccional, etc.
+                    
+                    # Check if this is a structured line (multiple space-separated parts)
+                    value_parts = value_clean.split()
+                    
+                    # For numeric/short fields, prefer shorter parts
+                    if field.type in ["number", "id_simple", "uf", "alphanum_code"]:
+                        # For short types, prefer the shortest part that passes type-gate
+                        for part in value_parts:
+                            if type_gate_generic(part, field.type):
+                                value_clean = part
+                                break
+                        # If no part passes, try the whole value
+                        if not type_gate_generic(value_clean, field.type):
+                            # Try first part if it's short
+                            if len(value_parts) > 0 and len(value_parts[0]) <= 10:
+                                value_clean = value_parts[0]
+                    elif field.type == "text" and len(value_parts) > 3:
+                        # For text fields, if line has many parts, might be structured
+                        # Try to extract just the relevant part (first few tokens)
+                        # But keep more context for longer fields
+                        if len(value_clean) > 50:  # Long text, might need truncation
+                            # Keep first 50 chars or first 5 words
+                            value_clean = " ".join(value_parts[:5])
+                    
+                    # IMPROVEMENT: Reject titles/headers before adding to candidates
+                    # Check if value_clean is a title/header (ends with ":" and is long)
+                    if value_clean.strip().endswith(":") and len(value_clean.strip()) > 10:
+                        title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                        value_lower_check = value_clean.lower().strip()
+                        if any(indicator in value_lower_check for indicator in title_indicators):
+                            # Skip this candidate - it's a title/header
+                            pass  # Don't add to cand_texts
+                        else:
+                            # Use the extracted line as the text window (highest priority)
+                            if value_clean and value_clean != (dst_block.text or ""):
+                                cand_texts.insert(0, value_clean)  # Insert at beginning for highest priority
+                    else:
+                        # Use the extracted line as the text window (highest priority)
+                        if value_clean and value_clean != (dst_block.text or ""):
+                            cand_texts.insert(0, value_clean)  # Insert at beginning for highest priority
+            elif label_line_idx is not None and len(dst_lines) > 0:
+                # Label found but no corresponding line - use first line of value block as fallback
+                # This handles cases where label and value are in different blocks but not perfectly aligned
+                first_value_line = dst_lines[0].strip() if dst_lines else ""
+                if first_value_line:
+                    # Extract first part for short fields
+                    if field.type in ["number", "id_simple", "uf", "alphanum_code"]:
+                        parts = first_value_line.split()
+                        if parts:
+                            for part in parts:
+                                if type_gate_generic(part, field.type):
+                                    cand_texts.insert(0, part)
+                                    break
+                    else:
+                        cand_texts.insert(0, first_value_line)
 
-    # Calculate position bonus once
-    position_bonus = _position_bonus(field.meta, dst_block.bbox)
-    
-    # If we have a structured parse result and it validates, return it immediately (highest priority)
-    # Structured parsing is very reliable and should take precedence over generic extraction
-    if structured_parse_result and cand.relation == "same_block":
-        ok_struct, normalized_struct = validate_and_normalize(
-            field.type or "text", structured_parse_result, enum_options=enum_options
-        )
-        if ok_struct and normalized_struct:
-            # Structured parse results are highly reliable - skip plausibility check and return immediately
-            # The parsing logic already filters out invalid patterns (e.g., pure numbers for cities)
-            page_index = getattr(layout, "page_index", 0)
-            return (
+        # Generate candidates (section-aware for text_multiline)
+        # Skip if same_block and we already have split candidates (to avoid labels)
+        # BUT: if we have a structured parse result, we want to keep it prioritized, so only add generic candidates after
+        if field_cand.relation != "same_block" or not cand_texts:
+            cands = _text_candidates(dst_block, layout, field.type or "text", max_lines_window=3, max_tokens=12)
+            # IMPROVEMENT: Filter out titles/headers before adding to candidates
+            for cand in cands:
+                if cand.strip().endswith(":") and len(cand.strip()) > 10:
+                    title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                    cand_lower = cand.lower().strip()
+                    if any(indicator in cand_lower for indicator in title_indicators):
+                        continue  # Skip titles/headers
+                cand_texts.append(cand)
+        elif structured_parse_result:
+            # If we have structured parse, still add generic candidates but structured will have much higher score
+            cands = _text_candidates(dst_block, layout, field.type or "text", max_lines_window=3, max_tokens=12)
+            # IMPROVEMENT: Filter out titles/headers before adding to candidates
+            for cand in cands:
+                if cand.strip().endswith(":") and len(cand.strip()) > 10:
+                    title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+                    cand_lower = cand.lower().strip()
+                    if any(indicator in cand_lower for indicator in title_indicators):
+                        continue  # Skip titles/headers
+                cand_texts.append(cand)
+
+        best = (None, 0.0, None)  # (value, score, chosen_text)
+
+        # Get enum_options from field meta if available
+        enum_options = field.meta.get("enum_options") if field.meta else None
+
+        # Calculate position bonus once
+        position_bonus = _position_bonus(field.meta, dst_block.bbox)
+        
+        # If we have a structured parse result and it validates, return it immediately (highest priority)
+        # Structured parsing is very reliable and should take precedence over generic extraction
+        if structured_parse_result and field_cand.relation == "same_block":
+            ok_struct, normalized_struct = validate_and_normalize(
+                field.type or "text", structured_parse_result, enum_options=enum_options
+            )
+            if ok_struct and normalized_struct:
+                # Structured parse results are highly reliable - skip plausibility check and return immediately
+                # The parsing logic already filters out invalid patterns (e.g., pure numbers for cities)
+                page_index = getattr(layout, "page_index", 0)
+                return (
                 normalized_struct,
                 0.90,  # High confidence for structured parse
-                {
-                    "node_id": cand.node_id,
-                    "relation": cand.relation,
-                    "page_index": page_index,
-                    "notes": "Value extracted via structured pattern parsing",
-                    "evidence": {"candidate_text": normalized_struct},
-                },
+                    {
+                        "node_id": field_cand.node_id,
+                        "relation": field_cand.relation,
+                        "page_index": page_index,
+                        "notes": "Value extracted via structured pattern parsing",
+                        "evidence": {"candidate_text": normalized_struct},
+                    },
             )
     
-    # For global_enum_scan, we already have the validated value in local_context
-    # Use it directly if available (before processing other candidates)
-    if cand.relation == "global_enum_scan" and cand.local_context:
-        # The local_context for global_enum_scan contains the normalized enum value directly
-        # (set by matcher after validation)
-        normalized_value = cand.local_context.strip()
-        # Verify it's still valid (should be, but double-check)
-        if normalized_value:
-            # Check if it matches enum options (if enum type)
-            if field.type == "enum" and enum_options:
-                # Already normalized, just verify it's in options
-                if normalized_value in enum_options:
-                    page_index = getattr(layout, "page_index", 0)
-                    return (
+        # For global_enum_scan, we already have the validated value in local_context
+        # Use it directly if available (before processing other candidates)
+        if field_cand.relation == "global_enum_scan" and field_cand.local_context:
+            # The local_context for global_enum_scan contains the normalized enum value directly
+            # (set by matcher after validation)
+            normalized_value = field_cand.local_context.strip()
+            # Verify it's still valid (should be, but double-check)
+            if normalized_value:
+                # Check if it matches enum options (if enum type)
+                if field.type == "enum" and enum_options:
+                    # Already normalized, just verify it's in options
+                    if normalized_value in enum_options:
+                        page_index = getattr(layout, "page_index", 0)
+                        return (
                         normalized_value,
                         0.75,  # confidence for global_enum_scan
                         {
-                            "node_id": cand.node_id,
-                            "relation": cand.relation,
+                            "node_id": field_cand.node_id,
+                            "relation": field_cand.relation,
                             "page_index": page_index,
                             "notes": "Value found via global enum scan across document",
                             "evidence": {"candidate_text": normalized_value},
                         },
                     )
-            else:
-                # Not enum or no options, use as-is
+                else:
+                    # Not enum or no options, use as-is
                     page_index = getattr(layout, "page_index", 0)
                     return (
                         normalized_value,
                         0.75,
                         {
-                            "node_id": cand.node_id,
-                            "relation": cand.relation,
+                            "node_id": field_cand.node_id,
+                            "relation": field_cand.relation,
                             "page_index": page_index,
                             "notes": "Value found via global enum scan across document",
                             "evidence": {"candidate_text": normalized_value},
@@ -602,8 +1098,17 @@ def extract_from_candidate(
     field_type = (field.type or "text").lower()
     
     for idx, txt in enumerate(cand_texts):
+        # IMPROVEMENT: Early rejection of titles/headers (before any processing)
+        # Check if text is clearly a title/header (ends with ":" and is long)
+        if txt.strip().endswith(":") and len(txt.strip()) > 10:
+            # Check for title indicators
+            title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+            txt_lower_check = txt.lower().strip()
+            if any(indicator in txt_lower_check for indicator in title_indicators):
+                continue  # Skip titles/headers early
+        
         # Check if this is the structured parse result (first candidate from same_block)
-        is_structured = (idx == 0 and cand.relation == "same_block" and structured_parse_result and txt == structured_parse_result)
+        is_structured = (idx == 0 and field_cand.relation == "same_block" and structured_parse_result and txt == structured_parse_result)
         
         # Remove "label: " if present, but preserve structured parsing results
         # If the text was from structured parsing and already clean, don't split
@@ -641,29 +1146,110 @@ def extract_from_candidate(
         
         # Removed field-specific validation for "cidade" - rely on semantic embeddings and LLM
         
+        # IMPROVEMENT: Check if field has low confidence and value might be from wrong field
+        # If confidence is very low (<0.4) and field has enum options, validate against enum
+        # This helps reject values that don't match expected enum options
+        if field.type == "enum" and enum_options:
+            # For enum fields, only accept values in the options list
+            txt_normalized_upper = txt_clean.upper().strip()
+            options_upper = [opt.upper().strip() for opt in enum_options]
+            if txt_normalized_upper not in options_upper:
+                # Check if it's a partial match or similar (e.g., "CONSIGNADO" in "SISTEMA CONSIGNADO")
+                is_partial_match = False
+                for opt in options_upper:
+                    if len(opt) > 3:  # Only check partial for longer options
+                        if txt_normalized_upper in opt or opt in txt_normalized_upper:
+                            # Extract the matching part
+                            if opt in txt_normalized_upper:
+                                txt_clean = opt  # Use the full enum option
+                                txt_normalized_upper = opt
+                                is_partial_match = True
+                                break
+                            elif txt_normalized_upper in opt:
+                                # Value is part of option - might be valid if it's a significant part
+                                if len(txt_normalized_upper) >= len(opt) * 0.7:  # At least 70% of option
+                                    txt_clean = opt  # Use the full enum option
+                                    txt_normalized_upper = opt
+                                    is_partial_match = True
+                                    break
+                if not is_partial_match:
+                    # Reject - not a valid enum value
+                    continue
+        
         # Additional check: reject common field labels that shouldn't be values
-        # This is especially important for text fields that might match labels
+        # IMPROVEMENT: More comprehensive list and better detection logic
         common_labels = [
-            "inscrição", "inscricao", "seccional", "subseção", "subsecao",
-            "categoria", "endereço", "endereco", "telefone", "situação", "situacao",
-            "nome", "data", "valor", "sistema", "produto", "endereço profissional",
-            "telefone profissional", "profissional", "subseção", "subsecao"
+            "inscrição", "inscricao", "inscriçao", "inscriç", "inscri",
+            "seccional", "seccion", "secc",
+            "subseção", "subsecao", "subsec",
+            "categoria", "categor", "categ",
+            "endereço", "endereco", "endereç", "enderec",
+            "telefone", "telefon", "telef",
+            "situação", "situacao", "situaç", "situac",
+            "nome", "name",
+            "data", "date",
+            "valor", "value",
+            "sistema", "system",
+            "produto", "product",
+            "endereço profissional", "endereco profissional", "endereço prof", "endereco prof",
+            "telefone profissional", "telefone prof", "telef prof",
+            "profissional", "profiss", "prof",
+            "conselho seccional", "conselho sec", "cons sec",
+            "pesquisa", "pesquis", "pesq",
+            "tipo", "type",
+            "parcela", "parcel",
+            "cidade", "city",
+            "referencia", "referência", "ref",
+            "seleção", "selecao", "selec",
+            "total", "tot",
         ]
         txt_lower_clean = txt_clean.lower().strip()
-        # If the text is exactly one of these common labels, reject it
+        
+        # Strategy 1: Exact match rejection
         if txt_lower_clean in common_labels:
             continue
         
-        # Reject if text is just a sequence of common labels (e.g., "Inscrição Seccional Subseção")
+        # Strategy 2: Prefix/suffix match (labels often end with separators or are prefixes)
+        # Reject if text starts with a known label prefix
+        for label in common_labels:
+            if txt_lower_clean.startswith(label) and len(txt_lower_clean) <= len(label) + 3:
+                # Text is essentially just the label (maybe with separator)
+                continue
+        
+        # Strategy 3: Reject sequences of labels (e.g., "Inscrição Seccional Subseção")
         words = txt_lower_clean.split()
-        if len(words) <= 3 and all(w in common_labels for w in words):
-            continue
-        # Reject if text is just 1-2 words that match common labels
-        words = txt_clean.split()
+        if len(words) <= 3:
+            # Check if all or most words are labels
+            label_words = sum(1 for w in words if w in common_labels or any(w.startswith(lbl) for lbl in common_labels))
+            if label_words >= len(words) * 0.7:  # 70% or more are labels
+                continue
+        
+        # Strategy 4: Reject short text (1-2 words) that matches labels
+        # BUT: Only if it's clearly just a label (not a value that happens to contain label word)
         if len(words) <= 2:
             words_lower = [w.lower().strip() for w in words]
-            if any(w in common_labels for w in words_lower):
+            # Check if text is EXACTLY a label (not just contains one)
+            if txt_lower_clean in common_labels:
                 continue
+            # Check if all words are labels (e.g., "Inscrição Seccional")
+            if len(words_lower) == 2 and all(w in common_labels for w in words_lower):
+                continue
+            # For single words, only reject if it's exactly a label
+            if len(words_lower) == 1 and words_lower[0] in common_labels:
+                continue
+        
+        # Generic label removal: if text starts with known label prefix, try to remove it
+        # This works for any field, not just specific ones
+        # Also handle multi-word labels like "Endereço Profissional"
+        for label in sorted(common_labels, key=len, reverse=True):  # Try longer labels first
+            if txt_lower_clean.startswith(label):
+                # Check if there's meaningful content after label
+                after_label = txt_clean[len(label):].lstrip(" :\u200b\t")
+                if len(after_label.strip()) >= 2:
+                    # Use text after label
+                    txt_clean = after_label.strip()
+                    txt_lower = txt_clean.lower().strip()
+                    break
         
         # Correction 5: Remove UF prefix from long text fields
         # If text starts with a UF (2 uppercase letters) followed by longer text, remove the UF
@@ -685,6 +1271,94 @@ def extract_from_candidate(
             if not re.match(r"^[A-Z]{2}$", txt_clean.strip()):
                 continue  # Reject short text values (likely incomplete extraction)
 
+        # IMPROVEMENT: Check if this value looks like it belongs to a different field
+        # This helps prevent extracting values that are clearly for other fields
+        # Example: extracting date "12/10/2025" for field "sistema" when it should be null or "CONSIGNADO"
+        field_name_lower = (field.name or "").lower()
+        import re
+        
+        # If field name suggests it's not a date field, but value is a date, be suspicious
+        if field_type != "date" and not ("data" in field_name_lower or "venc" in field_name_lower or "referencia" in field_name_lower):
+            # Check if extracted value looks like a date
+            date_patterns = [
+                r'\d{2}/\d{2}/\d{4}',  # DD/MM/YYYY
+                r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
+                r'\d{2}-\d{2}-\d{4}',  # DD-MM-YYYY
+            ]
+            if any(re.search(pattern, txt_clean) for pattern in date_patterns):
+                # Value looks like a date but field is not date-related
+                # Reject unless it's from structured parse or explicit label match
+                if field_cand.relation not in ["same_block", "same_line_right_of"]:
+                    # Not from structured parse or explicit label - likely wrong field
+                    continue
+        
+        # IMPROVEMENT: If field is enum but value doesn't match options, reject
+        # This prevents extracting random values for enum fields
+        if field.type == "enum" and enum_options:
+            txt_normalized_upper = txt_clean.upper().strip()
+            options_upper = [opt.upper().strip() for opt in enum_options]
+            if txt_normalized_upper not in options_upper:
+                # Check for partial match (e.g., "CONSIGNADO" in "SISTEMA CONSIGNADO")
+                is_partial = any(txt_normalized_upper in opt or opt in txt_normalized_upper for opt in options_upper if len(opt) > 3)
+                if not is_partial:
+                    # Not a valid enum value - reject
+                    continue
+        
+        # IMPROVEMENT: If field is money but value looks like a date, reject
+        if field_type == "money" or "valor" in field_name_lower or "parcela" in field_name_lower:
+            # Check if value looks like a date instead of money
+            if re.search(r'\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}', txt_clean):
+                # Looks like date, not money - reject
+                continue
+        
+        # IMPROVEMENT: If field is text but value looks like money, be suspicious
+        if field_type == "text" and ("sistema" in field_name_lower or "produto" in field_name_lower):
+            # Check if value looks like money (has currency symbols or format)
+            if re.search(r'[\d.,]+\s*(?:R\$|reais?|RS|USD|\$)', txt_clean, re.IGNORECASE) or re.search(r'\d+[,.]\d{2}$', txt_clean):
+                # Looks like money, not text - reject unless high confidence
+                if field_cand.relation not in ["same_block", "same_line_right_of"]:
+                    continue
+        
+        # IMPROVEMENT: Reject values that are clearly section titles/headers (end with ":")
+        # These are not values, they're labels/titles
+        # Check BEFORE any other processing to catch early
+        if txt_clean.strip().endswith(":"):
+            # Looks like a title/header (e.g., "Detalhamento de saldos por parcelas:")
+            # Reject if longer than 10 chars (definitely a title, not a value)
+            if len(txt_clean.strip()) > 10:
+                continue
+            # Also reject if it contains common title words and ends with ":"
+            title_indicators = ["detalhamento", "resumo", "informações", "dados", "campos", "seção", "secao"]
+            txt_lower_check = txt_clean.lower().strip()
+            if any(indicator in txt_lower_check for indicator in title_indicators) and txt_clean.strip().endswith(":"):
+                continue
+        
+        # IMPROVEMENT: Reject values that are all uppercase and look like titles/headers
+        # (unless they're enum values which are often uppercase)
+        if txt_clean.isupper() and len(txt_clean.split()) > 2:
+            # All uppercase with multiple words - likely a title/header
+            # Only accept if it's a valid enum value
+            if field.type != "enum" or not enum_options:
+                # Not enum or no options - reject uppercase titles
+                continue
+            # For enum, check if it matches - if not, reject
+            if enum_options and txt_clean.upper().strip() not in [opt.upper().strip() for opt in enum_options]:
+                continue
+        
+        # IMPROVEMENT: Additional check for title-like patterns
+        # Reject if text contains common title patterns (e.g., "Detalhamento de saldos por parcelas:")
+        title_patterns = [
+            r"detalhamento.*parcelas",
+            r"resumo.*saldos",
+            r"informações.*opera",
+            r"dados.*opera",
+        ]
+        txt_lower_pattern = txt_clean.lower().strip()
+        for pattern in title_patterns:
+            if re.search(pattern, txt_lower_pattern):
+                # Matches a title pattern - reject
+                continue
+        
         # Validate and normalize (with enum_options if enum type)
         # For UF fields, pass context block for gate validation
         if field_type == "uf":
@@ -698,10 +1372,28 @@ def extract_from_candidate(
                 field.type or "text", txt_clean, enum_options=enum_options
             )
 
+        # IMPROVEMENT: For fields with enum options, check if value matches BEFORE scoring
+        # This prevents low-confidence enum extractions
+        if field.type == "enum" and enum_options:
+            txt_normalized_upper = txt_clean.upper().strip()
+            options_upper = [opt.upper().strip() for opt in enum_options]
+            if txt_normalized_upper not in options_upper:
+                # Reject if not a valid enum value (already checked above, but double-check)
+                continue
+        
         # Score candidate (with position bonus)
         base_score = _score_candidate(
             field.type or "text", txt_clean, cand.relation, ok, position_bonus
         )
+        
+        # IMPROVEMENT: Penalize low-confidence candidates for fields that should be null if not found
+        # Fields like "produto", "selecao_de_parcelas" that often should be null
+        field_name_lower = (field.name or "").lower()
+        if field_name_lower in ["produto", "selecao_de_parcelas", "quantidade_parcelas", "tipo_de_operacao", "tipo_de_sistema"]:
+            # These fields should only accept values with high confidence
+            # Penalize if relation is not explicit (same_block, same_line_right_of)
+            if field_cand.relation not in ["same_block", "same_line_right_of", "same_table_row"]:
+                base_score *= 0.5  # Reduce score by 50% for indirect relations
         
         # Give significant boost to structured parse results (they're highly reliable)
         # Structured parse results are very reliable and should be prioritized
@@ -733,41 +1425,8 @@ def extract_from_candidate(
         # Adjust score: 70% base score + 30% plausibility adjustment
         score = score * (0.7 + 0.3 * plausibility_score)
         
-        # Apply semantic similarity boost using embeddings (if available)
+        # Embeddings removed - semantic similarity boost no longer used
         semantic_similarity_boost = 0.0
-        if embed_client and ok and normalized:
-            try:
-                # Build field description query (similar to embedding query)
-                field_query_parts = [field.name]
-                if field.description:
-                    field_query_parts.append(field.description[:100])
-                if field.synonyms:
-                    field_query_parts.extend(field.synonyms[:2])  # Top 2 synonyms
-                field_query = " ".join(field_query_parts)
-                
-                # Embed both the extracted value and the field description
-                value_text = normalized[:200]  # Limit length for embedding
-                texts_to_embed = [field_query, value_text]
-                embeddings = embed_client.embed(texts_to_embed)
-                
-                if len(embeddings) == 2:
-                    import numpy as np
-                    field_emb = np.array(embeddings[0])
-                    value_emb = np.array(embeddings[1])
-                    
-                    # Calculate cosine similarity
-                    dot_product = np.dot(field_emb, value_emb)
-                    norm_field = np.linalg.norm(field_emb)
-                    norm_value = np.linalg.norm(value_emb)
-                    
-                    if norm_field > 0 and norm_value > 0:
-                        cosine_sim = dot_product / (norm_field * norm_value)
-                        # Boost score by 15% of semantic similarity (capped at 0.15 boost)
-                        semantic_similarity_boost = 0.15 * max(0.0, cosine_sim)
-            except Exception:
-                # If embedding fails, continue without boost
-                pass
-        
         score = min(1.0, score + semantic_similarity_boost)
 
         if ok and score > best[1]:

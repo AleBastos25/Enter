@@ -1,0 +1,222 @@
+﻿python : Traceback (most recent call last):
+Au caractère C:\Users\aleba\AppData\Local\Temp\ps-script-a1c0e888-9fa3-45d0-8d22-c62e9d32bdf6.ps1:75 : 1
++ python scripts/debug_differences.py 2>&1 | Out-File -FilePath debug_f ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 229, in main
+    debug_single_pdf(pdf_name, label, schema_dict, pdf_path)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 73, in debug_single_pdf
+    profile = DocProfile.build(blocks, layout)
+              ^^^^^^^^^^^^^^^^
+AttributeError: type object 'DocProfile' has no attribute 'build'
+Traceback (most recent call last):
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 229, in main
+    debug_single_pdf(pdf_name, label, schema_dict, pdf_path)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 73, in debug_single_pdf
+    profile = DocProfile.build(blocks, layout)
+              ^^^^^^^^^^^^^^^^
+AttributeError: type object 'DocProfile' has no attribute 'build'
+Traceback (most recent call last):
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 229, in main
+    debug_single_pdf(pdf_name, label, schema_dict, pdf_path)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 73, in debug_single_pdf
+    profile = DocProfile.build(blocks, layout)
+              ^^^^^^^^^^^^^^^^
+AttributeError: type object 'DocProfile' has no attribute 'build'
+Traceback (most recent call last):
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 229, in main
+    debug_single_pdf(pdf_name, label, schema_dict, pdf_path)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 73, in debug_single_pdf
+    profile = DocProfile.build(blocks, layout)
+              ^^^^^^^^^^^^^^^^
+AttributeError: type object 'DocProfile' has no attribute 'build'
+================================================================================
+DEBUG PROFUNDO - ANALISANDO CADA DIFERENCA
+================================================================================
+
+================================================================================
+DEBUG: oab_1.pdf
+================================================================================
+
+1. Loading document...
+   - Page count: 1
+
+2. Enriching schema...
+   - Fields: ['nome', 'inscricao', 'seccional', 'subsecao', 'categoria', 'endereco_profissional', 'telefone_profissional', 'situacao']
+     - nome: type=text, synonyms=['nome', 'name']
+     - inscricao: type=id_simple, synonyms=['inscricao', 'n║', 'no']
+     - seccional: type=uf, synonyms=['seccional', 'uf', 'estado']
+     - subsecao: type=text, synonyms=['subsecao']
+     - categoria: type=enum, synonyms=['categoria']
+       enum_options=['ADVOGADO', 'ADVOGADA', 'SUPLEMENTAR', 'ESTAGIARIO', 'ESTAGI┴RIA', 'ESTAGI┴RIO', 'ESTAGIARIA']
+     - endereco_profissional: type=text_multiline, synonyms=['endereco_profissional', 'endereþo', 'endereco']
+     - telefone_profissional: type=phone_br, synonyms=['telefone_profissional']
+     - situacao: type=enum, synonyms=['situacao']
+       enum_options=['REGULAR', 'SUSPENSO', 'CANCELADO', 'ATIVO', 'INATIVO']
+
+3. Extracting blocks...
+   - Total blocks: 10
+   - Sample blocks (first 5):
+     [0] JOANA D'ARC
+     [1] InscriþÒo
+Seccional
+SubseþÒo
+     [2] 101943
+PR
+CONSELHO SECCIONAL - PARAN┴
+     [3] SUPLEMENTAR
+     [4] Endereþo Profissional
+
+4. Building layout...
+   - Layout built successfully
+
+5. Detecting tables...
+   - Tables found: 0
+
+6. Building document profile...
+
+ERRO ao processar oab_1.pdf: type object 'DocProfile' has no attribute 'build'
+
+================================================================================
+DEBUG: oab_2.pdf
+================================================================================
+
+1. Loading document...
+   - Page count: 1
+
+2. Enriching schema...
+   - Fields: ['nome', 'inscricao', 'seccional', 'subsecao', 'categoria', 'endereco_profissional', 'situacao']
+     - nome: type=text, synonyms=['nome', 'name']
+     - inscricao: type=id_simple, synonyms=['inscricao', 'n║', 'no']
+     - seccional: type=uf, synonyms=['seccional', 'uf', 'estado']
+     - subsecao: type=text, synonyms=['subsecao']
+     - categoria: type=enum, synonyms=['categoria']
+       enum_options=['ADVOGADO', 'ADVOGADA', 'SUPLEMENTAR', 'ESTAGIARIO', 'ESTAGI┴RIA', 'ESTAGI┴RIO', 'ESTAGIARIA']
+     - endereco_profissional: type=text_multiline, synonyms=['endereco_profissional', 'endereþo', 'endereco']
+     - situacao: type=enum, synonyms=['situacao']
+       enum_options=['REGULAR', 'SUSPENSO', 'CANCELADO', 'ATIVO', 'INATIVO']
+
+3. Extracting blocks...
+   - Total blocks: 9
+   - Sample blocks (first 5):
+     [0] LUIS FILIPE ARAUJO AMARAL
+     [1] InscriþÒo
+Seccional
+SubseþÒo
+     [2] 101943
+PR
+CONSELHO SECCIONAL - PARAN┴
+     [3] SUPLEMENTAR
+     [4] Endereþo Profissional
+
+4. Building layout...
+   - Layout built successfully
+
+5. Detecting tables...
+   - Tables found: 0
+
+6. Building document profile...
+
+ERRO ao processar oab_2.pdf: type object 'DocProfile' has no attribute 'build'
+
+================================================================================
+DEBUG: oab_3.pdf
+================================================================================
+
+1. Loading document...
+   - Page count: 1
+
+2. Enriching schema...
+   - Fields: ['nome', 'inscricao', 'seccional', 'subsecao', 'categoria', 'telefone_profissional', 'situacao']
+     - nome: type=text, synonyms=['nome', 'name']
+     - inscricao: type=id_simple, synonyms=['inscricao', 'n║', 'no']
+     - seccional: type=uf, synonyms=['seccional', 'uf', 'estado']
+     - subsecao: type=text, synonyms=['subsecao']
+     - categoria: type=enum, synonyms=['categoria']
+       enum_options=['ADVOGADO', 'ADVOGADA', 'SUPLEMENTAR', 'ESTAGIARIO', 'ESTAGI┴RIA', 'ESTAGI┴RIO', 'ESTAGIARIA']
+     - telefone_profissional: type=phone_br, synonyms=['telefone_profissional']
+     - situacao: type=enum, synonyms=['situacao']
+       enum_options=['REGULAR', 'SUSPENSO', 'CANCELADO', 'ATIVO', 'INATIVO']
+
+3. Extracting blocks...
+   - Total blocks: 10
+   - Sample blocks (first 5):
+     [0] SON GOKU
+     [1] SubseþÒo
+     [2] InscriþÒo
+Seccional
+     [3] 101943
+PR
+     [4] CONSELHO SECCIONAL - PARAN┴
+
+4. Building layout...
+   - Layout built successfully
+
+5. Detecting tables...
+   - Tables found: 1
+
+6. Building document profile...
+
+ERRO ao processar oab_3.pdf: type object 'DocProfile' has no attribute 'build'
+
+================================================================================
+DEBUG: tela_sistema_1.pdf
+================================================================================
+
+1. Loading document...
+   - Page count: 1
+
+2. Enriching schema...
+   - Fields: ['data_base', 'data_verncimento', 'quantidade_parcelas', 'produto', 'sistema', 'tipo_de_operacao', 'tipo_de_sistema']
+     - data_base: type=date, synonyms=['data_base', 'data', 'vencimento']
+     - data_verncimento: type=date, synonyms=['data_verncimento', 'data', 'vencimento']
+     - quantidade_parcelas: type=id_simple, synonyms=['quantidade_parcelas', 'n║', 'no']
+     - produto: type=text, synonyms=['produto']
+     - sistema: type=text, synonyms=['sistema']
+     - tipo_de_operacao: type=enum, synonyms=['tipo_de_operacao']
+     - tipo_de_sistema: type=enum, synonyms=['tipo_de_sistema']
+
+3. Extracting blocks...
+   - Total blocks: 7
+   - Sample blocks (first 5):
+     [0] Consulta de Cobranþa
+     [1] Detalhamento de saldos por parcelas:
+Data ReferÛnc
+     [2] Data ReferÛncia:
+SeleþÒo de parcelas:
+Intervalo de
+     [3] Atualizar
+03/09/2025
+Vencidas
+     [4] Vcto mais antigo
+Dias atraso Sistema
+Saldo Vencido
+
+4. Building layout...
+   - Layout built successfully
+
+5. Detecting tables...
+Traceback (most recent call last):
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 237, in <module>
+    main()
+    ~~~~^^
+  File "C:\X\2A\Stage\Enter\scripts\debug_differences.py", line 217, in main
+    print(f"\n\u2713 {pdf_name}: Sem diferenþas")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program 
+Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 
+19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>
+   - Tables found: 0
+
+6. Building document profile...
+
+ERRO ao processar tela_sistema_1.pdf: type object 'DocProfile' has no attribute 'build'

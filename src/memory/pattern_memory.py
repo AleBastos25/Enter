@@ -8,10 +8,12 @@ from typing import Dict, List, Optional, Tuple
 
 from .schema import (
     FieldMemory,
+    FieldMemoryV2,
     FingerprintObs,
     LabelMemory,
     OffsetObs,
     Relation,
+    StrategyStats,
     SynonymObs,
     ValueShapeObs,
 )
@@ -376,6 +378,135 @@ class PatternMemory:
 
         # Add value shape
         field_mem.value_shapes.append(value_shape)
+
+    def learn_strategy_stats(
+        self,
+        field_name: str,
+        label_text: str,
+        strategy: str,
+        success: bool,
+        dx: Optional[float] = None,
+        dy: Optional[float] = None,
+        shape: Optional[str] = None,
+        font_z: Optional[float] = None,
+        component_id: Optional[int] = None,
+    ) -> None:
+        """Learn strategy statistics (v2).
+
+        Args:
+            field_name: Field name.
+            label_text: Label text.
+            strategy: Strategy name ('table_row', 'same_line', 'same_block', 'south_of', 'semantic').
+            success: True if confidence >= 0.85.
+            dx: Optional offset dx.
+            dy: Optional offset dy.
+            shape: Optional shape string.
+            font_z: Optional font_z score.
+            component_id: Optional component_id.
+        """
+        # Get or create field memory v2
+        if field_name not in self.memory.fields_v2:
+            self.memory.fields_v2[field_name] = FieldMemoryV2(
+                field_name=field_name, label_text=label_text
+            )
+
+        field_mem_v2 = self.memory.fields_v2[field_name]
+
+        # Get or create strategy stats
+        if strategy not in field_mem_v2.strategies:
+            field_mem_v2.strategies[strategy] = StrategyStats(strategy=strategy)
+
+        stats = field_mem_v2.strategies[strategy]
+
+        # Update counters
+        stats.n_total += 1
+        if success:
+            stats.n_success += 1
+        stats.success_rate = stats.n_success / stats.n_total if stats.n_total > 0 else 0.0
+
+        # Update offsets
+        if dx is not None and dy is not None:
+            stats.dx_samples.append(dx)
+            stats.dy_samples.append(dy)
+            if len(stats.dx_samples) > 0:
+                stats.dx_mean = statistics.mean(stats.dx_samples)
+                stats.dy_mean = statistics.mean(stats.dy_samples)
+                if len(stats.dx_samples) > 1:
+                    stats.dx_sigma = statistics.stdev(stats.dx_samples)
+                    stats.dy_sigma = statistics.stdev(stats.dy_samples)
+                else:
+                    stats.dx_sigma = 0.0
+                    stats.dy_sigma = 0.0
+
+        # Update shapes
+        if shape:
+            stats.shapes[shape] = stats.shapes.get(shape, 0) + 1
+
+        # Update font_z
+        if font_z is not None:
+            stats.font_z_samples.append(font_z)
+            if len(stats.font_z_samples) > 0:
+                stats.font_z_mean = statistics.mean(stats.font_z_samples)
+                if len(stats.font_z_samples) > 1:
+                    stats.font_z_sigma = statistics.stdev(stats.font_z_samples)
+                else:
+                    stats.font_z_sigma = 0.0
+
+    def get_strategy_hints(
+        self, field_name: str, current_dx: Optional[float] = None, current_shape: Optional[str] = None
+    ) -> dict:
+        """Get strategy hints for a field (v2): auto_apply, deprioritize, hints.
+
+        Args:
+            field_name: Field name.
+            current_dx: Current document dx (for compatibility check).
+            current_shape: Current document shape (for compatibility check).
+
+        Returns:
+            Dict with 'auto_apply', 'deprioritize', 'hints' keys.
+        """
+        field_mem_v2 = self.memory.fields_v2.get(field_name)
+        if not field_mem_v2:
+            return {"auto_apply": {}, "deprioritize": [], "hints": {}}
+
+        n_min = 20  # Minimum samples for auto_apply/deprioritize
+        auto_apply: dict = {}
+        deprioritize: list = []
+        hints: dict = {}
+
+        for strategy, stats in field_mem_v2.strategies.items():
+            # auto_apply: n_total >= N_min, success_rate >= 0.9, e compatível
+            if stats.n_total >= n_min and stats.success_rate >= 0.9:
+                # Check compatibility
+                compatible = True
+                if current_dx is not None and stats.dx_samples:
+                    # Check |Δx_doc - Δx_mean| ≤ 2σ
+                    if abs(current_dx - stats.dx_mean) > 2 * max(stats.dx_sigma, 0.01):
+                        compatible = False
+                if current_shape and stats.shapes:
+                    # Check shape ∈ top_k_forms
+                    top_shapes = sorted(stats.shapes.items(), key=lambda x: x[1], reverse=True)[:3]
+                    top_shape_keys = [s[0] for s in top_shapes]
+                    if current_shape not in top_shape_keys:
+                        compatible = False  # Shape not in top forms
+
+                if compatible:
+                    auto_apply[strategy] = stats
+
+            # deprioritize: n_total >= N_min e success_rate <= 0.1
+            elif stats.n_total >= n_min and stats.success_rate <= 0.1:
+                deprioritize.append(strategy)
+
+            # hints: provide stats even if not auto_apply
+            if stats.n_total > 0:
+                hints[strategy] = {
+                    "success_rate": stats.success_rate,
+                    "n_total": stats.n_total,
+                    "dx_mean": stats.dx_mean,
+                    "dy_mean": stats.dy_mean,
+                }
+
+        return {"auto_apply": auto_apply, "deprioritize": deprioritize, "hints": hints}
 
     def commit(self) -> None:
         """Commit memory to disk (with pruning applied)."""

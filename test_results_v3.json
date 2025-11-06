@@ -1,0 +1,599 @@
+[
+  {
+    "pdf": "oab_1.pdf",
+    "result": {
+      "label": "carteira_oab",
+      "results": {
+        "nome": {
+          "value": "JOANA D'ARC",
+          "confidence": 0.65,
+          "source": "heuristic",
+          "trace": {
+            "relation": "pattern_scan",
+            "block_id": 0,
+            "label_block_id": null,
+            "score_tuple": [
+              1,
+              0,
+              1,
+              0.8,
+              0.8,
+              0,
+              0,
+              1
+            ],
+            "roi_info": {},
+            "source": "heuristic",
+            "page_index": 0,
+            "candidate_id": "pattern_0",
+            "assignment_score": 0.65,
+            "notes": "No evidence found"
+          }
+        },
+        "inscricao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "seccional": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "subsecao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "categoria": {
+          "value": "SUPLEMENTAR",
+          "confidence": 0.85,
+          "source": "heuristic",
+          "trace": {
+            "relation": "global_enum_scan",
+            "block_id": 3,
+            "label_block_id": 3,
+            "score_tuple": [
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              0.5,
+              0,
+              0
+            ],
+            "roi_info": {
+              "relation": "global_enum_scan",
+              "block_id": 3,
+              "label_block_id": 3,
+              "roi_method": "first_line_default",
+              "normalized_value": "SUPLEMENTAR"
+            },
+            "source": "fallback_match_fields",
+            "page_index": 0,
+            "notes": "No evidence found"
+          }
+        },
+        "endereco_profissional": {
+          "value": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista",
+          "confidence": 0.85,
+          "source": "heuristic",
+          "trace": {
+            "relation": "first_below_same_column",
+            "block_id": 5,
+            "label_block_id": 4,
+            "score_tuple": [
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              0.5,
+              0,
+              0
+            ],
+            "roi_info": {
+              "relation": "first_below_same_column",
+              "block_id": 5,
+              "label_block_id": 4,
+              "roi_method": "matched_line",
+              "label_line_idx": 0,
+              "value_line_idx": 0,
+              "col_bonus": 0.08,
+              "sec_bonus": 0.05,
+              "para_bonus": 0.03,
+              "memory_bonus": 0.0
+            },
+            "source": "fallback_match_fields",
+            "page_index": 0,
+            "notes": "No evidence found"
+          }
+        },
+        "telefone_profissional": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "situacao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  },
+  {
+    "pdf": "oab_2.pdf",
+    "result": {
+      "label": "carteira_oab",
+      "results": {
+        "nome": {
+          "value": "LUIS FILIPE ARAUJO AMARAL",
+          "confidence": 0.65,
+          "source": "heuristic",
+          "trace": {
+            "relation": "pattern_scan",
+            "block_id": 0,
+            "label_block_id": null,
+            "score_tuple": [
+              1,
+              0,
+              1,
+              0.8,
+              0.8,
+              0,
+              0,
+              1
+            ],
+            "roi_info": {},
+            "source": "heuristic",
+            "page_index": 0,
+            "candidate_id": "pattern_0",
+            "assignment_score": 0.65,
+            "notes": "No evidence found"
+          }
+        },
+        "inscricao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "seccional": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "subsecao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "categoria": {
+          "value": "SUPLEMENTAR",
+          "confidence": 0.85,
+          "source": "heuristic",
+          "trace": {
+            "relation": "global_enum_scan",
+            "block_id": 3,
+            "label_block_id": 3,
+            "score_tuple": [
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              0.5,
+              0,
+              0
+            ],
+            "roi_info": {
+              "relation": "global_enum_scan",
+              "block_id": 3,
+              "label_block_id": 3,
+              "roi_method": "first_line_default",
+              "normalized_value": "SUPLEMENTAR"
+            },
+            "source": "fallback_match_fields",
+            "page_index": 0,
+            "notes": "No evidence found"
+          }
+        },
+        "endereco_profissional": {
+          "value": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista",
+          "confidence": 0.85,
+          "source": "heuristic",
+          "trace": {
+            "relation": "first_below_same_column",
+            "block_id": 5,
+            "label_block_id": 4,
+            "score_tuple": [
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              0.5,
+              0,
+              0
+            ],
+            "roi_info": {
+              "relation": "first_below_same_column",
+              "block_id": 5,
+              "label_block_id": 4,
+              "roi_method": "matched_line",
+              "label_line_idx": 0,
+              "value_line_idx": 0,
+              "col_bonus": 0.08,
+              "sec_bonus": 0.05,
+              "para_bonus": 0.03,
+              "memory_bonus": 0.0
+            },
+            "source": "fallback_match_fields",
+            "page_index": 0,
+            "notes": "No evidence found"
+          }
+        },
+        "situacao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  },
+  {
+    "pdf": "oab_3.pdf",
+    "result": {
+      "label": "carteira_oab",
+      "results": {
+        "nome": {
+          "value": "SON GOKU",
+          "confidence": 0.65,
+          "source": "table",
+          "trace": {
+            "relation": "in_table",
+            "block_id": 0,
+            "label_block_id": null,
+            "score_tuple": [
+              1,
+              0,
+              1,
+              0.8,
+              0.8,
+              0,
+              0,
+              1
+            ],
+            "roi_info": {},
+            "source": "heuristic",
+            "page_index": 0,
+            "candidate_id": "pattern_0",
+            "assignment_score": 0.65,
+            "notes": "No evidence found"
+          }
+        },
+        "inscricao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "seccional": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "subsecao": {
+          "value": "101943",
+          "confidence": 0.75,
+          "source": "table",
+          "trace": {
+            "relation": "same_table_row",
+            "block_id": 2,
+            "label_block_id": 3,
+            "score_tuple": [
+              1,
+              0,
+              1,
+              0.8,
+              0.8,
+              0,
+              0,
+              1
+            ],
+            "roi_info": {},
+            "source": "heuristic",
+            "page_index": 0,
+            "candidate_id": "table_0_1_0",
+            "assignment_score": 0.75,
+            "notes": "No evidence found"
+          }
+        },
+        "categoria": {
+          "value": "SUPLEMENTAR",
+          "confidence": 0.85,
+          "source": "heuristic",
+          "trace": {
+            "relation": "global_enum_scan",
+            "block_id": 3,
+            "label_block_id": 3,
+            "score_tuple": [
+              0,
+              0,
+              1,
+              1,
+              1,
+              1,
+              0.5,
+              0,
+              0
+            ],
+            "roi_info": {
+              "relation": "global_enum_scan",
+              "block_id": 3,
+              "label_block_id": 3,
+              "roi_method": "first_line_default",
+              "normalized_value": "SUPLEMENTAR"
+            },
+            "source": "fallback_match_fields",
+            "page_index": 0,
+            "notes": "No evidence found"
+          }
+        },
+        "telefone_profissional": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "situacao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  },
+  {
+    "pdf": "tela_sistema_1.pdf",
+    "result": {
+      "label": "tela_sistema",
+      "results": {
+        "data_base": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "data_verncimento": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "quantidade_parcelas": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "produto": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "sistema": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "tipo_de_operacao": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "tipo_de_sistema": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  },
+  {
+    "pdf": "tela_sistema_2.pdf",
+    "result": {
+      "label": "tela_sistema",
+      "results": {
+        "pesquisa_por": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "pesquisa_tipo": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "sistema": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "valor_parcela": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "cidade": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  },
+  {
+    "pdf": "tela_sistema_3.pdf",
+    "result": {
+      "label": "tela_sistema",
+      "results": {
+        "data_referencia": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "selecao_de_parcelas": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        },
+        "total_de_parcelas": {
+          "value": null,
+          "confidence": 0.0,
+          "source": "none",
+          "trace": {
+            "reason": "no_evidence",
+            "page_index": 0,
+            "notes": "No evidence found for this field"
+          }
+        }
+      }
+    }
+  }
+]

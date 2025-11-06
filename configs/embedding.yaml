@@ -5,7 +5,7 @@ cache:
   dir: .cache/embeddings
   persist: true
 dim: 384
-enabled: true
+enabled: false  # Desligado por padrão - usar LLM + layout-first
 index:
   max_blocks_considered: 2000
   min_sim_threshold: 0.35
@@ -22,4 +22,4 @@ preproc:
   lowercase: true
   max_chars_per_block: 300
   strip_accents: true
-provider: local
+provider: none  # Força a não carregar nada pesado

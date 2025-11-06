@@ -1,0 +1,157 @@
+{
+  "tela_sistema": {
+    "patterns": [
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "062c6b01717dcd071e1ab521834492f6",
+        "alignment": "right",
+        "font_size": 13.0,
+        "x0": 0.553763440860215,
+        "y_pattern": 0.30456852791878175,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 496
+      },
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "1d4a65d3b49d92e938e2902f9a7504cb",
+        "alignment": "left",
+        "font_size": 10.0,
+        "x0": 0.0228494623655914,
+        "y_pattern": 0.34686971235194586,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 872
+      },
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "8118d2e3ba6fa41e558364b5983312f1",
+        "alignment": "left",
+        "font_size": 11.0,
+        "x0": 0.1424731182795699,
+        "y_pattern": 0.3451776907932133,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 420
+      },
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "9c1048d8e05b66b5a9d978516c356558",
+        "alignment": "right",
+        "font_size": 10.0,
+        "x0": 0.7046317388003037,
+        "y_pattern": 0.15905245346869712,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 195
+      },
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "2fb962aa823a88ffe57358eaf09dcfe7",
+        "alignment": "left",
+        "font_size": 10.0,
+        "x0": 0.08807896735003796,
+        "y_pattern": 0.8460236886632826,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 234
+      },
+      {
+        "label": "tela_sistema",
+        "pattern_hash": "d2bcad0f44cc2335320b0e83156df8f2",
+        "alignment": "right",
+        "font_size": 10.0,
+        "x0": 0.5573272589217919,
+        "y_pattern": 0.9289340101522843,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 54
+      }
+    ],
+    "total_documents": 856,
+    "layout_consistency": 0.9973579920739762
+  },
+  "carteira_oab": {
+    "patterns": [
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "d7a189385394bca989411c4b9c153d77",
+        "alignment": "left",
+        "font_size": 16.0,
+        "x0": 0.14772727272727273,
+        "y_pattern": 0.2681159696717193,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 4
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "abd283b73e7107349607d1107c5098f3",
+        "alignment": "left",
+        "font_size": 20.0,
+        "x0": 0.004734848484848485,
+        "y_pattern": 0.20833333333333334,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 63
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "b324c038dff9cf9206e723b437daa93e",
+        "alignment": "left",
+        "font_size": 20.0,
+        "x0": 0.28882575757575757,
+        "y_pattern": 0.20833333333333334,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 84
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "e963bbbaea2617ace9666daed57ffb7a",
+        "alignment": "left",
+        "font_size": 17.0,
+        "x0": 0.005681818181818182,
+        "y_pattern": 0.32608695652173914,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 49
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "154d02c059b6a764bca9a1e16b1b4797",
+        "alignment": "left",
+        "font_size": 19.0,
+        "x0": 0.14583333333333334,
+        "y_pattern": 0.20833330569059952,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 27
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "05018f964c32d8efac6bcfbf54d6c6ed",
+        "alignment": "left",
+        "font_size": 17.0,
+        "x0": 0.1681329423264907,
+        "y_pattern": 0.2903533906399236,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 3
+      },
+      {
+        "label": "carteira_oab",
+        "pattern_hash": "959a84b589b6dfe18bafc046bda26107",
+        "alignment": "left",
+        "font_size": 18.0,
+        "x0": 0.03225806451612903,
+        "y_pattern": 0.2368672543063888,
+        "label_role": "LABEL",
+        "value_role": "VALUE",
+        "count": 36
+      }
+    ],
+    "total_documents": 94,
+    "layout_consistency": 0.9736842105263158
+  }
+}

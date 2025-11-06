@@ -26,3 +26,14 @@ fingerprint:
   grid_resolution: [4, 4]  # quantization of bbox for fingerprint
   label_context_chars: 40  # context text cut from label
 
+# v3: Pattern Registry (dynamic pattern learning)
+patterns:
+  enabled: true
+  store_dir: "data/artifacts/pattern_registry"
+  shadow_promote_min_matches: 5
+  shadow_promote_min_precision: 0.95
+  decay_factor: 0.98
+  max_active_per_field: 6
+  bonus_shadow: 0.05
+  bonus_active: 0.12
+

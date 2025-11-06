@@ -61,9 +61,52 @@ class FieldMemory:
 
 
 @dataclass
+class StrategyStats:
+    """Statistics for a matching strategy (v2).
+
+    Tracks success rate, offsets, shapes, and style for each strategy.
+    """
+
+    strategy: str  # 'table_row', 'same_line', 'same_block', 'south_of', 'semantic'
+    n_total: int = 0
+    n_success: int = 0  # conf >= 0.85
+    success_rate: float = 0.0
+    
+    # Deslocamentos médios e σ
+    dx_mean: float = 0.0
+    dy_mean: float = 0.0
+    dx_sigma: float = 0.0
+    dy_sigma: float = 0.0
+    dx_samples: List[float] = field(default_factory=list)
+    dy_samples: List[float] = field(default_factory=list)
+    
+    # Formas (set de regex/charclass) com contagem
+    shapes: Dict[str, int] = field(default_factory=dict)  # shape -> count
+    
+    # Co-style (font_z médio/σ)
+    font_z_mean: float = 0.0
+    font_z_sigma: float = 0.0
+    font_z_samples: List[float] = field(default_factory=list)
+
+
+@dataclass
+class FieldMemoryV2:
+    """Memory v2 for a single field with StrategyStats (v2)."""
+
+    field_name: str
+    label_text: str  # Label text for this field
+    strategies: Dict[str, StrategyStats] = field(default_factory=dict)  # strategy -> stats
+    synonyms: List[SynonymObs] = field(default_factory=list)  # Keep for compatibility
+    offsets: List[OffsetObs] = field(default_factory=list)  # Keep for compatibility
+    fingerprints: List[FingerprintObs] = field(default_factory=list)  # Keep for compatibility
+    value_shapes: List[ValueShapeObs] = field(default_factory=list)  # Keep for compatibility
+
+
+@dataclass
 class LabelMemory:
     """Memory for a document label (e.g., "carteira_oab")."""
 
     label: str
     fields: Dict[str, FieldMemory] = field(default_factory=dict)
+    fields_v2: Dict[str, FieldMemoryV2] = field(default_factory=dict)  # v2 StrategyStats
 

@@ -1,0 +1,269 @@
+{
+  "pdf_path": "data/samples/oab_1.pdf",
+  "label": "carteira_oab",
+  "schema": {
+    "nome": "Nome do profissional, normalmente no canto superior esquerdo da imagem",
+    "inscricao": "Número de inscrição do profissional",
+    "seccional": "Seccional do profissional",
+    "subsecao": "Subseção à qual o profissional faz parte",
+    "categoria": "Categoria, pode ser ADVOGADO, ADVOGADA, SUPLEMENTAR, ESTAGIARIO, ESTAGIARIA",
+    "endereco_profissional": "Endereço do profissional",
+    "telefone_profissional": "Telefone do profissional",
+    "situacao": "Situação do profissional, normalmente no canto inferior direito."
+  },
+  "steps": {
+    "load": {
+      "blocks_count": 10,
+      "first_block_text": "JOANA D'ARC"
+    },
+    "layout": {
+      "has_graph_v2": true,
+      "has_grid": true,
+      "blocks_count": 10
+    },
+    "tables": {
+      "tables_count": 0,
+      "table_types": []
+    },
+    "schema": {
+      "fields_count": 8,
+      "field_names": [
+        "nome",
+        "inscricao",
+        "seccional",
+        "subsecao",
+        "categoria",
+        "endereco_profissional",
+        "telefone_profissional",
+        "situacao"
+      ]
+    },
+    "orthogonal_graph": {
+      "has_graph": true,
+      "adj_keys": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "thresholds": {
+        "tau_same_line": 0.01,
+        "tau_same_column": 0.2775416857954385
+      }
+    },
+    "roles": {
+      "roles_count": 10,
+      "role_distribution": {
+        "HEADER": 7,
+        "LABEL": 3,
+        "VALUE": 0
+      }
+    },
+    "lexicons": {
+      "nome": [
+        "canto.",
+        "superior.",
+        "canto-",
+        "esquerdo",
+        "superior",
+        "nome.",
+        "esquerdo-",
+        "imagem.",
+        "nome",
+        "canto:"
+      ],
+      "inscricao": [
+        "inscrição.",
+        "nº:",
+        "nº",
+        "inscrição-",
+        "inscricao-",
+        "n.:",
+        "n.",
+        "nº.",
+        "no",
+        "numero:"
+      ],
+      "seccional": [
+        "estado",
+        "estado-",
+        "sigla",
+        "estado:",
+        "sigla.",
+        "seccional-",
+        "uf:",
+        "uf.",
+        "sigla:",
+        "seccional"
+      ],
+      "subsecao": [
+        "parte:",
+        "subsecao.",
+        "parte-",
+        "faz:",
+        "faz-",
+        "parte.",
+        "subsecao:",
+        "subsecao",
+        "faz.",
+        "subsecao-"
+      ],
+      "categoria": [
+        "pode-",
+        "pode.",
+        "pode:",
+        "ser",
+        "ser:",
+        "advogado:",
+        "estagiária.",
+        "advogado",
+        "categoria",
+        "ser-"
+      ],
+      "endereco_profissional": [
+        "endereco",
+        "endereco_profissional:",
+        "endereco.",
+        "endereco-",
+        "endereco_profissional-",
+        "endereco_profissional",
+        "endereco:",
+        "endereco_profissional."
+      ],
+      "telefone_profissional": [
+        "telefone-",
+        "telefone_profissional.",
+        "telefone.",
+        "telefone",
+        "telefone_profissional",
+        "telefone_profissional:",
+        "telefone_profissional-",
+        "telefone:"
+      ],
+      "situacao": [
+        "inativo",
+        "direito",
+        "cancelado.",
+        "suspenso-",
+        "canto.",
+        "cancelado:",
+        "inferior.",
+        "canto-",
+        "situacao:",
+        "regular."
+      ]
+    },
+    "profile": {
+      "has_profile": true
+    },
+    "candidates": {
+      "nome": {
+        "count": 14,
+        "first_candidate": {
+          "candidate_id": "pos_0",
+          "relation": "position_based",
+          "snippet": "JOANA D'ARC"
+        }
+      },
+      "inscricao": {
+        "count": 0,
+        "first_candidate": null
+      },
+      "seccional": {
+        "count": 0,
+        "first_candidate": null
+      },
+      "subsecao": {
+        "count": 10,
+        "first_candidate": {
+          "candidate_id": "below_4",
+          "relation": "first_below_same_column",
+          "snippet": "Endereço Profissional"
+        }
+      },
+      "categoria": {
+        "count": 8,
+        "first_candidate": {
+          "candidate_id": "pattern_0",
+          "relation": "pattern_scan",
+          "snippet": "JOANA D'ARC"
+        }
+      },
+      "endereco_profissional": {
+        "count": 9,
+        "first_candidate": {
+          "candidate_id": "same_block_4",
+          "relation": "same_block",
+          "snippet": "Endereço Profissional AVENIDA PAULISTA, Nº 2300 an"
+        }
+      },
+      "telefone_profissional": {
+        "count": 3,
+        "first_candidate": {
+          "candidate_id": "same_block_4",
+          "relation": "same_block",
+          "snippet": "Endereço Profissional AVENIDA PAULISTA, Nº 2300 an"
+        }
+      },
+      "situacao": {
+        "count": 8,
+        "first_candidate": {
+          "candidate_id": "pattern_0",
+          "relation": "pattern_scan",
+          "snippet": "JOANA D'ARC"
+        }
+      },
+      "total": 52
+    },
+    "label_value_pairs": {
+      "nome": 0,
+      "inscricao": 0,
+      "seccional": 0,
+      "subsecao": 0,
+      "categoria": 0,
+      "endereco_profissional": 0,
+      "telefone_profissional": 0,
+      "situacao": 0
+    },
+    "pipeline_result": {
+      "nome": {
+        "value": null,
+        "source": "none"
+      },
+      "inscricao": {
+        "value": null,
+        "source": "none"
+      },
+      "seccional": {
+        "value": null,
+        "source": "none"
+      },
+      "subsecao": {
+        "value": null,
+        "source": "none"
+      },
+      "categoria": {
+        "value": "SUPLEMENTAR",
+        "source": "heuristic"
+      },
+      "endereco_profissional": {
+        "value": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista",
+        "source": "heuristic"
+      },
+      "telefone_profissional": {
+        "value": null,
+        "source": "none"
+      },
+      "situacao": {
+        "value": null,
+        "source": "none"
+      }
+    }
+  }
+}

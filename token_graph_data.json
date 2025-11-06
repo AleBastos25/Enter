@@ -1,0 +1,368 @@
+{
+  "tokens": [
+    {
+      "id": 0,
+      "text": "JOANA D'ARC",
+      "bbox": [
+        0.004734848484848485,
+        0.010869561762049578,
+        0.16183712988188773,
+        0.07309782332268314
+      ],
+      "block_id": 1,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 1,
+      "text": "Inscrição",
+      "bbox": [
+        0.004734848484848485,
+        0.20833333333333334,
+        0.08051136768225467,
+        0.25811593428902
+      ],
+      "block_id": 2,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 2,
+      "text": "Seccional",
+      "bbox": [
+        0.14772727272727273,
+        0.20833330569059952,
+        0.22572442257043088,
+        0.2556267890377321
+      ],
+      "block_id": 2,
+      "line_index": 1,
+      "span_index": 0
+    },
+    {
+      "id": 3,
+      "text": "Subseção",
+      "bbox": [
+        0.28882575757575757,
+        0.20833333333333334,
+        0.37304921583695844,
+        0.25811593428902
+      ],
+      "block_id": 2,
+      "line_index": 2,
+      "span_index": 0
+    },
+    {
+      "id": 4,
+      "text": "101943",
+      "bbox": [
+        0.007575757575757576,
+        0.266304347826087,
+        0.0612803011229544,
+        0.3086195406706437
+      ],
+      "block_id": 3,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 5,
+      "text": "PR",
+      "bbox": [
+        0.14772727272727273,
+        0.2681159696717193,
+        0.16877272634795218,
+        0.3079420449077219
+      ],
+      "block_id": 3,
+      "line_index": 1,
+      "span_index": 0
+    },
+    {
+      "id": 6,
+      "text": "CONSELHO SECCIONAL - PARANÁ",
+      "bbox": [
+        0.28882575757575757,
+        0.2644927536231884,
+        0.5571873982747396,
+        0.3068079464677451
+      ],
+      "block_id": 3,
+      "line_index": 2,
+      "span_index": 0
+    },
+    {
+      "id": 7,
+      "text": "SUPLEMENTAR",
+      "bbox": [
+        0.005681818181818182,
+        0.32608695652173914,
+        0.12643656586155747,
+        0.36840214936629584
+      ],
+      "block_id": 4,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 8,
+      "text": "Endereço Profissional",
+      "bbox": [
+        0.005681818181818182,
+        0.41666663902393286,
+        0.18067614237467447,
+        0.46396012237106543
+      ],
+      "block_id": 5,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 9,
+      "text": "AVENIDA PAULISTA, Nº 2300 andar Pilotis, Bela Vista",
+      "bbox": [
+        0.005681818181818182,
+        0.4746376811594203,
+        0.39986928304036456,
+        0.5169529016467108
+      ],
+      "block_id": 6,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 10,
+      "text": "SÃO PAULO - SP",
+      "bbox": [
+        0.006628787878787879,
+        0.5253623188405797,
+        0.1430435614152388,
+        0.5701666569364243
+      ],
+      "block_id": 7,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 11,
+      "text": "01310300",
+      "bbox": [
+        0.004734848484848485,
+        0.5778985507246377,
+        0.07634091377258301,
+        0.6202137712119282
+      ],
+      "block_id": 8,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 12,
+      "text": "Telefone Profissional",
+      "bbox": [
+        0.004734848484848485,
+        0.7047101449275363,
+        0.1550464052142519,
+        0.7470253654148268
+      ],
+      "block_id": 9,
+      "line_index": 0,
+      "span_index": 0
+    },
+    {
+      "id": 13,
+      "text": "SITUAÇÃO REGULAR",
+      "bbox": [
+        0.7291666666666666,
+        0.8695652173913043,
+        0.9518485213771011,
+        0.9268152541008549
+      ],
+      "block_id": 10,
+      "line_index": 0,
+      "span_index": 0
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 2,
+      "direction": "south",
+      "distance": 0.18999635482179947
+    },
+    {
+      "from": 1,
+      "to": 0,
+      "direction": "north",
+      "distance": 0.19124094126881033
+    },
+    {
+      "from": 1,
+      "to": 4,
+      "direction": "south",
+      "distance": 0.05423731043718866
+    },
+    {
+      "from": 1,
+      "to": 5,
+      "direction": "east",
+      "distance": 0.11562689145406088
+    },
+    {
+      "from": 2,
+      "to": 0,
+      "direction": "north",
+      "distance": 0.18999635482179947
+    },
+    {
+      "from": 2,
+      "to": 5,
+      "direction": "south",
+      "distance": 0.05604895992555475
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "direction": "east",
+      "distance": 0.14421163905750622
+    },
+    {
+      "from": 2,
+      "to": 1,
+      "direction": "west",
+      "distance": 0.14410273956530023
+    },
+    {
+      "from": 3,
+      "to": 6,
+      "direction": "south",
+      "distance": 0.0524257162342901
+    },
+    {
+      "from": 3,
+      "to": 2,
+      "direction": "west",
+      "distance": 0.14421163905750622
+    },
+    {
+      "from": 4,
+      "to": 1,
+      "direction": "north",
+      "distance": 0.05423731043718866
+    },
+    {
+      "from": 4,
+      "to": 7,
+      "direction": "south",
+      "distance": 0.059782608695652106
+    },
+    {
+      "from": 4,
+      "to": 5,
+      "direction": "east",
+      "distance": 0.12382197018825647
+    },
+    {
+      "from": 5,
+      "to": 2,
+      "direction": "north",
+      "distance": 0.05604895992555475
+    },
+    {
+      "from": 5,
+      "to": 9,
+      "direction": "south",
+      "distance": 0.20776628411334497
+    },
+    {
+      "from": 5,
+      "to": 3,
+      "direction": "east",
+      "distance": 0.17268748716874557
+    },
+    {
+      "from": 5,
+      "to": 7,
+      "direction": "west",
+      "distance": 0.09219080751592464
+    },
+    {
+      "from": 6,
+      "to": 1,
+      "direction": "north",
+      "distance": 0.0524257162342901
+    },
+    {
+      "from": 6,
+      "to": 7,
+      "direction": "south",
+      "distance": 0.061594202898550665
+    },
+    {
+      "from": 7,
+      "to": 5,
+      "direction": "north",
+      "distance": 0.059215545654296875
+    },
+    {
+      "from": 7,
+      "to": 8,
+      "direction": "south",
+      "distance": 0.09306882775348169
+    },
+    {
+      "from": 8,
+      "to": 7,
+      "direction": "north",
+      "distance": 0.09306882775348169
+    },
+    {
+      "from": 8,
+      "to": 9,
+      "direction": "south",
+      "distance": 0.055481910705566406
+    },
+    {
+      "from": 9,
+      "to": 8,
+      "direction": "north",
+      "distance": 0.055481910705566406
+    },
+    {
+      "from": 9,
+      "to": 10,
+      "direction": "south",
+      "distance": 0.05196919648543641
+    },
+    {
+      "from": 10,
+      "to": 9,
+      "direction": "north",
+      "distance": 0.05196919648543641
+    },
+    {
+      "from": 10,
+      "to": 11,
+      "direction": "south",
+      "distance": 0.051291673079781
+    },
+    {
+      "from": 11,
+      "to": 10,
+      "direction": "north",
+      "distance": 0.051291673079781
+    },
+    {
+      "from": 11,
+      "to": 12,
+      "direction": "south",
+      "distance": 0.12681159420289856
+    },
+    {
+      "from": 12,
+      "to": 11,
+      "direction": "north",
+      "distance": 0.12681159420289856
+    }
+  ]
+}

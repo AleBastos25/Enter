@@ -103,6 +103,25 @@ class AdjacencyMatrix:
             neighbors.update(self.get_neighbors(token_id, direction))
         return list(neighbors)
     
+    def remove_edge(self, from_id: int, to_id: int, relation: str) -> None:
+        """Remove uma edge da matriz de adjacência (bidirecional).
+        
+        Args:
+            from_id: ID do token origem.
+            to_id: ID do token destino.
+            relation: Relação ("east", "west", "north", "south").
+        """
+        # Remover relação direta
+        if from_id in self.adj and relation in self.adj[from_id]:
+            if to_id in self.adj[from_id][relation]:
+                self.adj[from_id][relation].remove(to_id)
+        
+        # Remover relação reversa
+        reverse_relation = self._reverse_relation.get(relation)
+        if reverse_relation and to_id in self.adj and reverse_relation in self.adj[to_id]:
+            if from_id in self.adj[to_id][reverse_relation]:
+                self.adj[to_id][reverse_relation].remove(from_id)
+    
     def are_neighbors(self, token_id1: int, token_id2: int) -> bool:
         """Verifica se dois tokens são vizinhos em qualquer direção.
         

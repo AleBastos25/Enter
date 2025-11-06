@@ -1057,6 +1057,78 @@ class ValueMustHaveLabelRule(BaseRule):
                             break
 
 
+class SeparatedPairIsolationRule(BaseRule):
+    """Remove todas as conexões de tokens separados, exceto a conexão horizontal entre LABEL e VALUE.
+    
+    Quando separamos "Label: Value" em dois tokens, eles devem formar um par isolado:
+    - LABEL conecta apenas ao VALUE (east)
+    - VALUE conecta apenas ao LABEL (west)
+    - Remover todas as outras conexões (south, north, etc.)
+    """
+    
+    def __init__(self):
+        super().__init__(name="SeparatedPairIsolationRule", priority=35, dependencies=["InitialValueRule"])
+    
+    def apply(self, context: RuleContext) -> None:
+        """Remove conexões extras de tokens separados."""
+        # Encontrar todos os tokens que foram separados
+        separated_tokens = [t for t in context.tokens if t.separated_pair]
+        
+        if not separated_tokens:
+            return
+        
+        # Agrupar tokens separados em pares (LABEL-VALUE adjacentes)
+        separated_pairs = []
+        for token in separated_tokens:
+            token_id = token.id
+            role = context.get_role(token_id)
+            
+            if role == "LABEL":
+                # Procurar VALUE à direita (east)
+                east_neighbors = context.adjacency.get_neighbors(token_id, "east")
+                for value_id in east_neighbors:
+                    value_token = context.get_node_by_id(value_id)
+                    if value_token and value_token.separated_pair and context.get_role(value_id) == "VALUE":
+                        separated_pairs.append((token_id, value_id))
+                        break
+        
+        # Para cada par separado, remover todas as conexões exceto LABEL-VALUE (east/west)
+        for label_id, value_id in separated_pairs:
+            # Remover conexões verticais (south/north) do LABEL
+            south_neighbors = list(context.adjacency.get_neighbors(label_id, "south"))
+            for neighbor_id in south_neighbors:
+                if neighbor_id != value_id:  # Manter apenas conexão com VALUE se houver
+                    context.graph.remove_edge(label_id, neighbor_id, "south")
+                    context.adjacency.remove_edge(label_id, neighbor_id, "south")
+            
+            north_neighbors = list(context.adjacency.get_neighbors(label_id, "north"))
+            for neighbor_id in north_neighbors:
+                if neighbor_id != value_id:
+                    context.graph.remove_edge(neighbor_id, label_id, "north")
+                    context.adjacency.remove_edge(neighbor_id, label_id, "north")
+            
+            # Remover conexões verticais (south/north) do VALUE
+            south_neighbors = list(context.adjacency.get_neighbors(value_id, "south"))
+            for neighbor_id in south_neighbors:
+                if neighbor_id != label_id:
+                    context.graph.remove_edge(value_id, neighbor_id, "south")
+                    context.adjacency.remove_edge(value_id, neighbor_id, "south")
+            
+            north_neighbors = list(context.adjacency.get_neighbors(value_id, "north"))
+            for neighbor_id in north_neighbors:
+                if neighbor_id != label_id:
+                    context.graph.remove_edge(neighbor_id, value_id, "north")
+                    context.adjacency.remove_edge(neighbor_id, value_id, "north")
+            
+            # Garantir que LABEL e VALUE estão conectados horizontalmente (east/west)
+            # Se não estão, adicionar conexão
+            if value_id not in context.adjacency.get_neighbors(label_id, "east"):
+                from src.graph_builder.models import Edge
+                edge = Edge(from_id=label_id, to_id=value_id, relation="east")
+                context.graph.add_edge(edge)
+                context.adjacency.add_edge(label_id, value_id, "east")
+
+
 class ValueNoLabelConnectionsRule(BaseRule):
     """Passagem FINAL 10: VALUES não devem ligar para baixo (south) ou direita (east) com LABELs."""
     

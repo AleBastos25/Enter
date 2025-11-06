@@ -24,7 +24,8 @@ from src.graph_builder.rules.final import (
     HeaderNoNorthWestRule,
     HeaderNoNorthRule,
     ValueNoLabelConnectionsRule,
-    LabelSingleValueRule
+    LabelSingleValueRule,
+    SeparatedPairIsolationRule
 )
 from src.graph_builder.table_detector import TableDetector, Table, TableOrientation
 
@@ -45,6 +46,7 @@ class RoleClassifier:
             InitialValueRule(),
             InitialHeaderRule(),
             LabelOnlyConnectionsRule(),
+            SeparatedPairIsolationRule(),  # Isola pares LABEL-VALUE separados de um único span
             HeaderPreservationRule(),
             ValueLabelUniquenessRule(),
             TypographicHierarchyRule(),

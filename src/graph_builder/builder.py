@@ -141,6 +141,9 @@ class GraphBuilder:
     ) -> List[Edge]:
         """Cria edges verticais (south) - entre linhas.
         
+        Usa distribuição de espaçamento vertical entre linhas para evitar conexões
+        entre tokens que estão muito distantes (ex: "01310300" e "Telefone Profissional").
+        
         Args:
             lines: Dicionário de linhas.
             sorted_line_ids: Lista ordenada de IDs de linhas (de cima para baixo).
@@ -149,6 +152,56 @@ class GraphBuilder:
             Lista de edges verticais.
         """
         edges = []
+        
+        # Calcular distribuição de espaçamento vertical entre linhas consecutivas
+        line_spacings = []
+        for line_idx in range(len(sorted_line_ids) - 1):
+            current_line_id = sorted_line_ids[line_idx]
+            next_line_id = sorted_line_ids[line_idx + 1]
+            
+            # Calcular distância vertical média entre as duas linhas
+            current_tokens = lines[current_line_id]
+            next_tokens = lines[next_line_id]
+            
+            # Para cada token na linha atual, encontrar o token mais próximo na linha seguinte
+            min_spacing = float('inf')
+            for token1 in current_tokens:
+                for token2 in next_tokens:
+                    # Calcular distância vertical (do fim do token1 ao início do token2)
+                    vertical_gap = token2.bbox.y0 - token1.bbox.y1
+                    if vertical_gap > 0:  # Apenas gaps positivos
+                        min_spacing = min(min_spacing, vertical_gap)
+            
+            if min_spacing < float('inf'):
+                line_spacings.append(min_spacing)
+        
+        # Calcular estatísticas de espaçamento vertical
+        if line_spacings:
+            spacings_sorted = sorted(line_spacings)
+            median_spacing = spacings_sorted[len(spacings_sorted) // 2]
+            
+            # Usar percentil 25 (Q25) para identificar gaps "normais" (ignorar outliers grandes)
+            # Isso é mais robusto quando há muitos gaps pequenos e alguns muito grandes
+            q25_idx = len(spacings_sorted) // 4
+            q25_spacing = spacings_sorted[q25_idx] if q25_idx < len(spacings_sorted) else median_spacing
+            
+            # Threshold baseado em Q25 com fator maior (mais restritivo)
+            # Se a mediana for muito alta (indicando muitos gaps grandes), usar Q25
+            if median_spacing > 0.03:  # Se mediana é alta, usar Q25
+                base_spacing = q25_spacing
+            else:
+                base_spacing = median_spacing
+            
+            # Usar 2.5x o espaçamento base para ser mais restritivo
+            vertical_spacing_threshold = base_spacing * 2.5
+        else:
+            vertical_spacing_threshold = None
+        
+        # Threshold absoluto baseado no tamanho da página (assumindo coordenadas normalizadas [0,1])
+        # Distância vertical não pode ser maior que 4.2% da altura da página (mais restritivo)
+        # Isso garante que mesmo quando a mediana é alta, gaps grandes são removidos
+        # 0.042 é um bom limite que captura gaps problemáticos como 0.0421, 0.0446, 0.0483
+        absolute_vertical_threshold = 0.042
         
         for line_idx in range(len(sorted_line_ids)):
             current_line_id = sorted_line_ids[line_idx]
@@ -160,10 +213,31 @@ class GraphBuilder:
                     token1, line_idx, sorted_line_ids, lines
                 )
                 
-                # Se houver candidatos, escolher o melhor
-                if candidates:
+                # Filtrar candidatos baseado na distribuição de espaçamento
+                filtered_candidates = []
+                for candidate in candidates:
+                    token2 = candidate[0]
+                    vertical_gap = candidate[3]  # vertical_gap está na posição 3
+                    
+                    # Verificar se distância vertical é muito grande comparado à distribuição
+                    gap_too_large = False
+                    
+                    if vertical_spacing_threshold is not None:
+                        # Gap é muito grande se for maior que o threshold baseado na distribuição
+                        gap_too_large = vertical_gap > vertical_spacing_threshold
+                    
+                    # Também verificar threshold absoluto (relativo ao tamanho da página)
+                    if vertical_gap > absolute_vertical_threshold:
+                        gap_too_large = True
+                    
+                    # Se gap não é muito grande, manter candidato
+                    if not gap_too_large:
+                        filtered_candidates.append(candidate)
+                
+                # Se houver candidatos filtrados, escolher o melhor
+                if filtered_candidates:
                     best_candidate = max(
-                        candidates,
+                        filtered_candidates,
                         key=lambda c: (c[5], c[2], c[1], -c[4], -c[3], -c[6])
                     )
                     token2 = best_candidate[0]

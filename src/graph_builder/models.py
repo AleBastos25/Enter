@@ -53,6 +53,7 @@ class Token:
     color: Optional[str] = None
     block_id: Optional[int] = None
     role: Optional[str] = None  # HEADER, LABEL, VALUE, None
+    separated_pair: bool = False  # True se foi separado de um único span (ex: "Label: Value")
     
     # Padrões regex (compilados uma vez)
     _date_pattern = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}")
@@ -213,6 +214,19 @@ class Graph:
     def add_edge(self, edge: Edge) -> None:
         """Adiciona uma edge ao grafo."""
         self.edges.append(edge)
+    
+    def remove_edge(self, from_id: int, to_id: int, relation: str) -> None:
+        """Remove uma edge do grafo.
+        
+        Args:
+            from_id: ID do token origem.
+            to_id: ID do token destino.
+            relation: Relação ("east", "west", "north", "south").
+        """
+        self.edges = [
+            e for e in self.edges
+            if not (e.from_id == from_id and e.to_id == to_id and e.relation == relation)
+        ]
     
     def get_node(self, node_id: int) -> Optional[Token]:
         """Obtém um nó por ID."""

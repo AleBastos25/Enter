@@ -79,7 +79,8 @@ class TokenExtractor:
                             italic=token_data.get("italic", False),
                             color=token_data.get("color"),
                             block_id=block_idx,
-                            role=token_data.get("role")  # Usar role sugerido se disponível (para padrão múltiplos dois pontos)
+                            role=token_data.get("role"),  # Usar role sugerido se disponível (para padrão múltiplos dois pontos)
+                            separated_pair=token_data.get("separated_pair", False)  # Marcar se foi separado
                         )
                         tokens.append(token)
                         token_id += 1
@@ -458,22 +459,15 @@ class TokenExtractor:
         if not colon_positions:
             return []
         
-        # Se tem apenas um ":", usar lógica simples (como antes)
+        # Se tem apenas um ":", separar e classificar automaticamente
         if len(colon_positions) == 1:
             colon_pos = colon_positions[0]
             before_colon = span_text[:colon_pos + 1].strip()
             after_colon = span_text[colon_pos + 1:].strip()
             
-            # Se foi chamado após merge, sempre separar (mais permissivo)
-            # Caso contrário, verificar se depois dos dois pontos tem uma data ou parece um valor
-            is_after_merge = hasattr(self, '_merging') and getattr(self, '_merging', False)
-            if not is_after_merge:
-                # Verificação normal: só separar se parecer um padrão label:value
-                is_date_after = bool(self.date_pattern.search(after_colon))
-                is_value_after = bool(re.search(r"^\d|^[A-Z]", after_colon))
-                
-                if not (is_date_after or (is_value_after and len(after_colon) > 0)):
-                    return []
+            # Verificar se há espaço depois dos dois pontos (padrão "texto: texto")
+            if len(after_colon) == 0:
+                return []  # Não separar se não há nada depois
             
             # Separar em dois tokens
             total_len = len(span_text)
@@ -487,7 +481,9 @@ class TokenExtractor:
                     "font_size": font_size,
                     "bold": bold,
                     "italic": italic,
-                    "color": color
+                    "color": color,
+                    "role": "LABEL",  # Token que termina com ":" é automaticamente LABEL
+                    "separated_pair": True  # Marcar como par separado
                 },
                 {
                     "text": after_colon,
@@ -495,7 +491,9 @@ class TokenExtractor:
                     "font_size": font_size,
                     "bold": bold,
                     "italic": italic,
-                    "color": color
+                    "color": color,
+                    "role": "VALUE",  # Token após ":" é automaticamente VALUE
+                    "separated_pair": True  # Marcar como par separado
                 }
             ]
         

@@ -176,10 +176,14 @@ for route in app.routes:
 print("[MAIN] Rotas registradas com sucesso", flush=True)
 
 # Servir arquivos estáticos (HTMLs do grafo)
+# NOTA: A rota do router /graph/{run_id}.html tem prioridade sobre o mount do StaticFiles
+# O mount do StaticFiles serve como fallback para arquivos que não são servidos pela rota
 graphs_dir = project_root / "backend" / "static" / "graphs"
 graphs_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/graph", StaticFiles(directory=str(graphs_dir)), name="graph")
+# Montar StaticFiles APÓS as rotas do router para que a rota tenha prioridade
+app.mount("/graph", StaticFiles(directory=str(graphs_dir)), name="graph_static")
 print(f"[MAIN] Diretorio de graficos: {graphs_dir}", flush=True)
+print(f"[MAIN] StaticFiles montado em /graph (fallback)", flush=True)
 
 
 @app.get("/")

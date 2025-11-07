@@ -9,21 +9,51 @@ export function useSessionStorage() {
   const [folders, setFolders] = useState<Record<string, Folder>>({});
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Função auxiliar para remover duplicatas de páginas
+  const removeDuplicatePages = useCallback((pages: Page[]): Page[] => {
+    const seen = new Set<string>();
+    const unique: Page[] = [];
+    
+    for (const page of pages) {
+      if (!seen.has(page.id)) {
+        seen.add(page.id);
+        unique.push(page);
+      }
+    }
+    
+    return unique;
+  }, []);
+
   // Carregar dados ao montar
   useEffect(() => {
     const loadedPages = storage.loadPages();
     const loadedFolders = storage.loadFolders();
-    setPages(loadedPages);
+    // Remover duplicatas ao carregar
+    const uniquePages = removeDuplicatePages(loadedPages);
+    if (uniquePages.length !== loadedPages.length) {
+      console.warn(`[useSessionStorage] Removidas ${loadedPages.length - uniquePages.length} páginas duplicadas ao carregar`);
+      // Salvar versão sem duplicatas
+      storage.savePages(uniquePages);
+    }
+    setPages(uniquePages);
     setFolders(loadedFolders);
     setIsLoaded(true);
-  }, []);
+  }, [removeDuplicatePages]);
+
+  // Nota: Não precisamos de um useEffect separado para remover duplicatas do estado
+  // porque:
+  // 1. addPage já verifica duplicatas antes de adicionar
+  // 2. O carregamento inicial remove duplicatas
+  // 3. O salvamento sempre salva versão sem duplicatas
 
   // Salvar páginas quando mudarem
   useEffect(() => {
     if (isLoaded) {
-      storage.savePages(pages);
+      // Sempre salvar a versão sem duplicatas
+      const uniquePages = removeDuplicatePages(pages);
+      storage.savePages(uniquePages);
     }
-  }, [pages, isLoaded]);
+  }, [pages, isLoaded, removeDuplicatePages]);
 
   // Salvar pastas quando mudarem
   useEffect(() => {
@@ -34,6 +64,13 @@ export function useSessionStorage() {
 
   const addPage = useCallback((page: Page) => {
     setPages((prev) => {
+      // Verificar se a página já existe (evitar duplicatas)
+      const existingPage = prev.find((p) => p.id === page.id);
+      if (existingPage) {
+        console.warn(`[useSessionStorage] Página ${page.id} já existe, ignorando adição duplicada`);
+        return prev;
+      }
+      
       const updated = [...prev, page];
       // Salvar imediatamente no storage
       if (typeof window !== "undefined") {

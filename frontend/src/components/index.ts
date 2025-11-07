@@ -7,4 +7,5 @@ export { MessageSystem } from "./MessageSystem";
 export { MessageUser } from "./MessageUser";
 export { SchemaPopup } from "./SchemaPopup";
 export { Sidebar } from "./Sidebar";
+export { GraphViewer } from "./GraphViewer";
 

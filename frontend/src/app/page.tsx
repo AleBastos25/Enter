@@ -110,44 +110,73 @@ export default function Home() {
         
         // IMPORTANTE: Capturar currentPageId UMA VEZ no início e não mudar
         // Se não há sessão, criar uma nova e usar para TODOS os PDFs
-        let pageId: string | null = currentPageId;
+        // SEMPRE verificar o storage primeiro para pegar a sessão mais recente
+        const storagePages = storage.loadPages();
+        const now = Date.now();
         
-        // Se não há sessão atual, verificar se uma foi criada recentemente
+        // Prioridade 1: Usar currentPageId se existir e a página ainda existir
+        let pageId: string | null = currentPageId;
+        if (pageId) {
+          const pageExists = storagePages.find(p => p.id === pageId);
+          if (!pageExists) {
+            // Página foi deletada, resetar
+            const deletedPageId = pageId;
+            pageId = null;
+            console.log(`[Page] Sessão ${deletedPageId} não existe mais, criando nova`);
+          } else {
+            console.log(`[Page] Usando sessão existente: ${pageId}`);
+          }
+        }
+        
+        // Prioridade 2: Se não há sessão atual, verificar se uma foi criada recentemente
         // (evita criar múltiplas sessões quando múltiplos PDFs são enviados simultaneamente)
         if (!pageId) {
           // Verificar se outra chamada já criou uma página enquanto esperávamos
-          const currentPages = storage.loadPages();
-          const now = Date.now();
-          const recentPages = currentPages
-            .filter(p => p.createdAt > now - 3000) // Últimos 3 segundos
+          // Usar uma janela de tempo maior (10 segundos) para capturar sessões criadas em sequência
+          const recentPages = storagePages
+            .filter(p => p.createdAt > now - 10000) // Últimos 10 segundos
             .sort((a, b) => b.createdAt - a.createdAt); // Mais recente primeiro
           
           if (recentPages.length > 0) {
-            // Usar página recente ao invés de criar nova
+            // Usar página mais recente ao invés de criar nova
             pageId = recentPages[0].id;
             setCurrentPageId(pageId);
-            console.log(`[Page] Reutilizando sessão recente: ${pageId}`);
+            console.log(`[Page] Reutilizando sessão recente: ${pageId} (criada há ${Math.round((now - recentPages[0].createdAt) / 1000)}s)`);
           } else {
-            // Criar nova página
+            // Criar nova página com timestamp único para evitar colisões
+            const timestamp = Date.now();
             const newPage: Page = {
-              id: `page_${Date.now()}`,
+              id: `page_${timestamp}`,
               title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
                 day: "2-digit", 
                 month: "2-digit", 
                 hour: "2-digit", 
                 minute: "2-digit" 
               })}`,
-              createdAt: Date.now(),
+              createdAt: timestamp,
               messages: [],
             };
-            addPage(newPage);
-            pageId = newPage.id;
-            setCurrentPageId(pageId);
-            setLastSchema(null);
-            console.log(`[Page] Nova sessão criada: ${pageId}`);
+            // Verificar novamente se não foi criada entre a verificação e agora
+            // (double-check para evitar race conditions)
+            const pagesAfterCheck = storage.loadPages();
+            const veryRecentPages = pagesAfterCheck
+              .filter(p => p.createdAt > now - 2000) // Últimos 2 segundos
+              .sort((a, b) => b.createdAt - a.createdAt);
+            
+            if (veryRecentPages.length > 0) {
+              // Alguém criou uma sessão enquanto verificávamos, usar ela
+              pageId = veryRecentPages[0].id;
+              setCurrentPageId(pageId);
+              console.log(`[Page] Reutilizando sessão criada durante verificação: ${pageId}`);
+            } else {
+              // Criar nova página
+              addPage(newPage);
+              pageId = newPage.id;
+              setCurrentPageId(pageId);
+              setLastSchema(null);
+              console.log(`[Page] Nova sessão criada: ${pageId}`);
+            }
           }
-        } else {
-          console.log(`[Page] Usando sessão existente: ${pageId}`);
         }
         
         // Garantir que pageId não seja null daqui em diante
@@ -169,21 +198,33 @@ export default function Home() {
         }
         
         // Se a página não foi encontrada, criar uma nova com o mesmo ID
+        // IMPORTANTE: Verificar novamente antes de criar para evitar duplicatas
         if (!page) {
-          console.warn(`[Page] Página ${finalPageId} não encontrada, criando nova com mesmo ID...`);
-          const newPage: Page = {
-            id: finalPageId,
-            title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
-              day: "2-digit", 
-              month: "2-digit", 
-              hour: "2-digit", 
-              minute: "2-digit" 
-            })}`,
-            createdAt: Date.now(),
-            messages: [],
-          };
-          addPage(newPage);
-          page = newPage;
+          // Verificar uma última vez se a página não foi criada entre a verificação anterior e agora
+          const finalCheckPages = storage.loadPages();
+          const finalCheckPage = finalCheckPages.find((p) => p.id === finalPageId);
+          
+          if (finalCheckPage) {
+            // Página foi criada entre as verificações, usar ela
+            page = finalCheckPage;
+            console.log(`[Page] Página ${finalPageId} encontrada na verificação final`);
+          } else {
+            console.warn(`[Page] Página ${finalPageId} não encontrada, criando nova com mesmo ID...`);
+            const newPage: Page = {
+              id: finalPageId,
+              title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
+                day: "2-digit", 
+                month: "2-digit", 
+                hour: "2-digit", 
+                minute: "2-digit" 
+              })}`,
+              createdAt: Date.now(),
+              messages: [],
+            };
+            // addPage já verifica duplicatas, então é seguro chamar
+            addPage(newPage);
+            page = newPage;
+          }
         }
         
         // Garantir que a página está selecionada
@@ -206,7 +247,7 @@ export default function Home() {
         let schemaChanged = false;
         
         // Verificar se há uma mensagem de schema muito recente (últimos 2 segundos) - pode ser duplicação
-        const now = Date.now();
+        // Usar a variável 'now' já declarada anteriormente
         const veryRecentSchemaMessage = schemaMessages.find(msg => (now - msg.createdAt) < 2000);
         if (veryRecentSchemaMessage) {
           console.log("[Page] Mensagem de schema muito recente encontrada (possível duplicação), ignorando verificação");
@@ -399,12 +440,20 @@ export default function Home() {
           );
 
           // Criar mensagens do sistema para cada run
-          const systemMessages: MessageSystem[] = runs.map((run) => ({
-            id: `msg_system_${run.run_id}`,
-            role: "system",
-            createdAt: Date.now(),
-            run,
-          }));
+          const systemMessages: MessageSystem[] = runs.map((run) => {
+            // Log para debug do dev mode
+            if (devMode) {
+              console.log(`[Page] Run ${run.run_id} - dev data:`, run.dev);
+              console.log(`[Page] Run ${run.run_id} - dev.elapsed_ms:`, run.dev?.elapsed_ms);
+              console.log(`[Page] Run ${run.run_id} - dev.graph_url:`, run.dev?.graph_url);
+            }
+            return {
+              id: `msg_system_${run.run_id}`,
+              role: "system",
+              createdAt: Date.now(),
+              run,
+            };
+          });
 
           // Atualizar página com mensagens do sistema (sem a de processamento)
           updatePage(finalPageId, {

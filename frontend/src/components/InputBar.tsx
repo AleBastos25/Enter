@@ -359,10 +359,14 @@ export function InputBar({
           
           // Aguardar um pouco para garantir que a resposta apareceu na tela
           // e que o estado foi atualizado antes de enviar o próximo
+          // IMPORTANTE: Aguardar mais tempo para garantir que a sessão foi criada/atualizada
           if (i < matchedPairs.length - 1) {
             console.log(`[InputBar] Aguardando resposta aparecer na tela antes de enviar próximo PDF...`);
-            // Aguardar mais tempo para garantir que a resposta foi renderizada
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Aguardar mais tempo para garantir que:
+            // 1. A resposta foi renderizada
+            // 2. O estado da sessão foi atualizado
+            // 3. A próxima chamada vai reutilizar a mesma sessão
+            await new Promise(resolve => setTimeout(resolve, 1500));
           }
         }
         console.log("[InputBar] Todos os PDFs enviados com sucesso");

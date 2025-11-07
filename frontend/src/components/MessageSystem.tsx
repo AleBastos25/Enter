@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { MessageSystem as MessageSystemType, ExtractionStep } from "@/lib/types";
 import { apiClient } from "@/lib/api";
+import { GraphViewer } from "./GraphViewer";
 
 interface MessageSystemProps {
   message: MessageSystemType;
@@ -24,6 +25,7 @@ const stepLabels: Record<ExtractionStep, string> = {
 
 export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps) {
   const [copied, setCopied] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
   const run = message.run;
 
   const handleCopy = () => {
@@ -67,14 +69,48 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
         <div className="bg-[#2a1f1f] border border-[#ff4444] rounded-lg p-4 max-w-2xl animate-fade-in">
           <div className="font-semibold mb-2 text-white">Erro ao processar {run.filename}</div>
           <div className="mb-2 text-[#ff8888]">{run.error_message}</div>
-          {devMode && run.dev && (
-            <div className="mt-2 text-sm text-[#9ca3af]">
-              <div>Tempo: {run.dev.elapsed_ms} ms</div>
-              {run.dev.rules_used && run.dev.rules_used.length > 0 && (
-                <div>Regras: {run.dev.rules_used.join(", ")}</div>
+          {devMode && (
+            <div className="mt-2 text-sm text-[#9ca3af] border-t border-[#404040] pt-2">
+              {run.dev ? (
+                <>
+                  {run.dev.elapsed_ms !== undefined && (
+                    <div>Tempo: <span className="text-[#FF6B00]">{run.dev.elapsed_ms} ms</span></div>
+                  )}
+                  {run.dev.rules_used && run.dev.rules_used.length > 0 && (
+                    <div>Regras: <span className="text-[#e5e5e5]">{run.dev.rules_used.join(", ")}</span></div>
+                  )}
+                  {(run.dev.graph_url || run.run_id) && (
+                    <div>
+                      <button
+                        onClick={() => {
+                          const url = run.dev?.graph_url || apiClient.getGraphUrl(run.run_id);
+                          console.log("[MessageSystem] Abrindo grafo HTML (erro):", url);
+                          console.log("[MessageSystem] run_id:", run.run_id);
+                          console.log("[MessageSystem] run.dev:", run.dev);
+                          setShowGraph(true);
+                        }}
+                        className="text-[#FF6B00] hover:text-[#FF7A00] underline cursor-pointer bg-transparent border-none p-0"
+                      >
+                        Abrir Grafo HTML →
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[#9ca3af] italic">Dados de dev não disponíveis</div>
               )}
             </div>
           )}
+
+          {/* Modal do grafo (renderizado uma vez, fora das condições) */}
+          {showGraph && (run.dev?.graph_url || run.run_id) && (
+            <GraphViewer
+              isOpen={showGraph}
+              onClose={() => setShowGraph(false)}
+              graphUrl={run.dev?.graph_url || apiClient.getGraphUrl(run.run_id)}
+            />
+          )}
+
           {onRetry && (
             <button
               onClick={onRetry}
@@ -115,25 +151,46 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
       <div className="bg-[#171717] border border-[#404040] rounded-lg p-4 max-w-2xl w-full animate-fade-in">
         <div className="font-semibold mb-2 text-white">{run.filename}</div>
 
-        {devMode && run.dev && (
-          <div className="mb-3 text-sm text-[#9ca3af] space-y-1">
-            <div>Tempo: <span className="text-[#FF6B00]">{run.dev.elapsed_ms} ms</span></div>
-            {run.dev.rules_used && run.dev.rules_used.length > 0 && (
-              <div>Regras: <span className="text-[#e5e5e5]">{run.dev.rules_used.join(", ")}</span></div>
-            )}
-            {run.dev.graph_url && (
-              <div>
-                <a
-                  href={apiClient.getGraphUrl(run.run_id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#FF6B00] hover:text-[#FF7A00] underline"
-                >
-                  Abrir Grafo →
-                </a>
-              </div>
+        {devMode && (
+          <div className="mb-3 text-sm text-[#9ca3af] space-y-1 border-t border-[#404040] pt-2">
+            {run.dev ? (
+              <>
+                {run.dev.elapsed_ms !== undefined && (
+                  <div>Tempo: <span className="text-[#FF6B00]">{run.dev.elapsed_ms} ms</span></div>
+                )}
+                {run.dev.rules_used && run.dev.rules_used.length > 0 && (
+                  <div>Regras: <span className="text-[#e5e5e5]">{run.dev.rules_used.join(", ")}</span></div>
+                )}
+                {(run.dev.graph_url || run.run_id) && (
+                  <div>
+                    <button
+                      onClick={() => {
+                        const url = run.dev?.graph_url || apiClient.getGraphUrl(run.run_id);
+                        console.log("[MessageSystem] Abrindo grafo HTML:", url);
+                        console.log("[MessageSystem] run_id:", run.run_id);
+                        console.log("[MessageSystem] run.dev:", run.dev);
+                        setShowGraph(true);
+                      }}
+                      className="text-[#FF6B00] hover:text-[#FF7A00] underline cursor-pointer bg-transparent border-none p-0"
+                    >
+                      Abrir Grafo HTML →
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-[#9ca3af] italic">Dados de dev não disponíveis</div>
             )}
           </div>
+        )}
+
+        {/* Modal do grafo (renderizado uma vez, fora das condições) */}
+        {showGraph && (run.dev?.graph_url || run.run_id) && (
+          <GraphViewer
+            isOpen={showGraph}
+            onClose={() => setShowGraph(false)}
+            graphUrl={run.dev?.graph_url || apiClient.getGraphUrl(run.run_id)}
+          />
         )}
 
         {run.result && (

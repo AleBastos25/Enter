@@ -143,6 +143,7 @@ class ApiClient {
    * Obtém URL do HTML do grafo.
    */
   getGraphUrl(runId: string): string {
+    // A rota é /graph/{run_id}.html (sem /api)
     return `${API_BASE_URL}/graph/${runId}.html`;
   }
 }

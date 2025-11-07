@@ -1,4 +1,4 @@
-/** Sidebar com páginas, busca e pastas. */
+/** Sidebar com sessões, busca e labels. */
 
 "use client";
 
@@ -33,7 +33,7 @@ export function Sidebar({
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
 
-  // Filtrar páginas baseado na busca
+  // Filtrar sessões baseado na busca
   const filteredPages = useMemo(() => {
     if (!searchQuery.trim()) return pages;
     const query = searchQuery.toLowerCase();
@@ -69,7 +69,7 @@ export function Sidebar({
     setEditingTitle("");
   };
 
-  // Agrupar páginas por label (pastas)
+  // Agrupar sessões por label
   const pagesByLabel = useMemo(() => {
     const grouped: Record<string, Page[]> = {};
     pages.forEach((page) => {
@@ -94,10 +94,10 @@ export function Sidebar({
           <div className="w-2 h-2 bg-white"></div>
         </div>
         
-        {/* Botão Nova Conversa */}
+        {/* Botão Nova Sessão */}
         <button
           onClick={() => {
-            // Criar nova página ao clicar
+            // Criar nova sessão ao clicar
             const newPageId = `page_${Date.now()}`;
             onSelectPage(newPageId);
           }}
@@ -106,7 +106,7 @@ export function Sidebar({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nova Extração
+          Nova Sessão
         </button>
 
         {/* Busca */}
@@ -115,7 +115,7 @@ export function Sidebar({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar conversas..."
+            placeholder="Buscar sessões..."
             className="w-full px-3 py-2 bg-[#2a2a2a] border border-[#404040] rounded-md text-sm text-white placeholder-[#9ca3af] focus:outline-none focus:border-[#FF6B00]"
           />
           <svg className="w-4 h-4 absolute right-3 top-2.5 text-[#9ca3af]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@ export function Sidebar({
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto p-2">
-        {/* Switch Páginas / Pastas */}
+        {/* Switch Sessões / Labels */}
         <div className="flex gap-1 mb-3 p-1 bg-[#1f1f1f] rounded-md">
           <button
             onClick={() => onViewModeChange("pages")}
@@ -136,7 +136,7 @@ export function Sidebar({
                 : "text-[#9ca3af] hover:text-white"
             }`}
           >
-            Páginas
+            Sessões
           </button>
           <button
             onClick={() => onViewModeChange("folders")}
@@ -146,14 +146,14 @@ export function Sidebar({
                 : "text-[#9ca3af] hover:text-white"
             }`}
           >
-            Pastas
+            Labels
           </button>
         </div>
 
         {viewMode === "pages" ? (
           <div className="space-y-1">
             {filteredPages.length === 0 ? (
-              <p className="text-xs text-[#9ca3af] p-2 text-center">Nenhuma conversa encontrada</p>
+              <p className="text-xs text-[#9ca3af] p-2 text-center">Nenhuma sessão encontrada</p>
             ) : (
               filteredPages.map((page) => (
                 <div

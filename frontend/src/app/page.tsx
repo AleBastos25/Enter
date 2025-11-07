@@ -1,4 +1,4 @@
-/** Página principal da aplicação. */
+/** Sessão principal da aplicação. */
 
 "use client";
 
@@ -86,18 +86,19 @@ export default function Home() {
       console.log("[Page] Schema:", schema);
       console.log("[Page] PDFs:", pdfFiles.map(f => f.name));
       
-      // Declarar pageId e processingMessageId fora do try para usar no catch
+      // Declarar pageId fora do try para usar no catch
+      // Usar a sessão atual se existir, senão criar uma nova apenas uma vez
       let pageId: string | null = currentPageId;
-      let processingMessageId: string | undefined;
       
       try {
-        // Criar nova página se não houver uma selecionada
+        // Buscar ou criar página (apenas uma vez, no início)
         let page: Page | undefined;
         
+        // Se não há sessão atual, criar uma nova
         if (!pageId) {
           const newPage: Page = {
             id: `page_${Date.now()}`,
-            title: `Nova Extração ${new Date().toLocaleString("pt-BR", { 
+            title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
               day: "2-digit", 
               month: "2-digit", 
               hour: "2-digit", 
@@ -111,6 +112,7 @@ export default function Home() {
           pageId = newPage.id;
           page = newPage;
           setCurrentPageId(pageId);
+          console.log(`[Page] Nova sessão criada: ${pageId}`);
         } else {
           // Buscar página existente (primeiro do estado, depois do storage)
           page = pages.find((p) => p.id === pageId);
@@ -118,11 +120,12 @@ export default function Home() {
             const storagePages = storage.loadPages();
             page = storagePages.find((p) => p.id === pageId);
           }
+          console.log(`[Page] Usando sessão existente: ${pageId}`);
         }
         
         if (!page) {
-          console.error("Página não encontrada");
-          alert("Erro: página não encontrada. Tente novamente.");
+          console.error("Sessão não encontrada");
+          alert("Erro: sessão não encontrada. Tente novamente.");
           return;
         }
         
@@ -130,114 +133,166 @@ export default function Home() {
         if (currentPageId !== pageId) {
           setCurrentPageId(pageId);
         }
+        
+        // Atualizar pageId para usar na próxima iteração (se houver múltiplos PDFs)
+        // Isso garante que todos os PDFs vão para a mesma sessão
 
-        // Criar mensagem do usuário
-        const userMessage: MessageUser = {
-          id: `msg_user_${Date.now()}`,
-          role: "user",
-          createdAt: Date.now(),
-          payload: {
-            label,
-            schemaName: "Manual", // TODO: passar nome do arquivo
-            pdfFiles: pdfFiles.map((f) => ({ name: f.name, size: f.size })),
-          },
-        };
+        // Processar PDFs sequencialmente (ping-pong: um PDF → resposta → próximo PDF → resposta)
+        for (let i = 0; i < pdfFiles.length; i++) {
+          const pdfFile = pdfFiles[i];
+          const isLast = i === pdfFiles.length - 1;
+          
+          // Criar mensagem do usuário para este PDF específico
+          const userMessage: MessageUser = {
+            id: `msg_user_${Date.now()}_${i}`,
+            role: "user",
+            createdAt: Date.now(),
+            payload: {
+              label,
+              schemaName: "Manual", // TODO: passar nome do arquivo
+              pdfFiles: [{ name: pdfFile.name, size: pdfFile.size }],
+            },
+          };
 
-        // Mensagem de processamento temporária
-        processingMessageId = `msg_processing_${Date.now()}`;
-        const processingMessage: MessageSystem = {
-          id: processingMessageId,
-          role: "system",
-          createdAt: Date.now(),
-          run: {
-            run_id: `processing_${Date.now()}`,
-            filename: `Processando ${pdfFiles.length} PDF(s)...`,
-            status: "processing",
-            result: undefined,
-            error_message: undefined,
-            dev: undefined,
-          },
-        };
+          // Mensagem de processamento temporária
+          const processingMessageId = `msg_processing_${Date.now()}_${i}`;
+          const processingMessage: MessageSystem = {
+            id: processingMessageId,
+            role: "system",
+            createdAt: Date.now(),
+            run: {
+              run_id: `processing_${Date.now()}_${i}`,
+              filename: `Processando ${pdfFile.name}...`,
+              status: "processing",
+              result: undefined,
+              error_message: undefined,
+              dev: undefined,
+            },
+          };
 
-        // Adicionar mensagem do usuário e mensagem de processamento IMEDIATAMENTE
-        // Usar função que garante atualização síncrona
-        const updatedMessages = [...page.messages, userMessage, processingMessage];
-        
-        console.log("Adicionando mensagens:", {
-          pageId,
-          userMessage,
-          processingMessage,
-          totalMessages: updatedMessages.length
-        });
-        
-        updatePage(pageId, {
-          messages: updatedMessages,
-        });
-        
-        // Garantir que a página está selecionada
-        setCurrentPageId(pageId);
-        
-        // Forçar atualização imediata (sem delay)
-        setUpdateTrigger((prev) => prev + 1);
+          // Buscar página atualizada antes de adicionar mensagens
+          // Sempre usar a mesma pageId para garantir que todos os PDFs vão para a mesma sessão
+          const currentPages = storage.loadPages();
+          const currentPage = currentPages.find((p) => p.id === pageId) || page;
+          
+          // Garantir que estamos usando a mesma sessão
+          if (currentPage.id !== pageId) {
+            console.warn(`[Page] Sessão mudou durante processamento. Esperado: ${pageId}, encontrado: ${currentPage.id}`);
+          }
+          
+          // Adicionar mensagem do usuário e mensagem de processamento
+          const updatedMessages = [...currentPage.messages, userMessage, processingMessage];
+          
+          console.log(`[Page] Adicionando mensagens para PDF ${i + 1}/${pdfFiles.length}:`, {
+            pageId,
+            pdfName: pdfFile.name,
+            userMessage,
+            processingMessage,
+            totalMessages: updatedMessages.length
+          });
+          
+          updatePage(pageId, {
+            messages: updatedMessages,
+          });
+          
+          // Garantir que a página está selecionada
+          setCurrentPageId(pageId);
+          
+          // Forçar atualização imediata
+          setUpdateTrigger((prev) => prev + 1);
 
-        // Executar extração
-        console.log("[Page] ANTES de chamar extract()");
-        console.log("[Page]   - label:", label);
-        console.log("[Page]   - schema:", schema);
-        console.log("[Page]   - pdfFiles:", pdfFiles.map(f => f.name));
-        console.log("[Page]   - devMode:", devMode);
-        
-        let runs: RunResult[] = [];
-        try {
-          console.log("[Page] Chamando extract() agora...");
-          runs = await extract(label, schema, pdfFiles, devMode);
-          console.log("[Page] extract() retornou:", runs);
-        } catch (extractError) {
-          console.error("[Page] ERRO em extract():", extractError);
-          throw extractError;
+          // Executar extração para este PDF específico
+          console.log(`[Page] Processando PDF ${i + 1}/${pdfFiles.length}: ${pdfFile.name}`);
+          console.log("[Page]   - label:", label);
+          console.log("[Page]   - schema:", schema);
+          console.log("[Page]   - devMode:", devMode);
+          
+          let runs: RunResult[] = [];
+          try {
+            console.log(`[Page] Chamando extract() para ${pdfFile.name}...`);
+            runs = await extract(label, schema, [pdfFile], devMode);
+            console.log(`[Page] extract() retornou para ${pdfFile.name}:`, runs);
+          } catch (extractError) {
+            console.error(`[Page] ERRO em extract() para ${pdfFile.name}:`, extractError);
+            throw extractError;
+          }
+
+          // Buscar página atualizada do estado
+          const updatedPages = storage.loadPages();
+          const finalPage = updatedPages.find((p) => p.id === pageId);
+          
+          if (!finalPage) {
+            console.error("Sessão não encontrada após extração");
+            return;
+          }
+
+          // Remover mensagem de processamento e adicionar resultados
+          const messagesWithoutProcessing = finalPage.messages.filter(
+            (msg) => msg.id !== processingMessageId
+          );
+
+          // Criar mensagens do sistema para cada run
+          const systemMessages: MessageSystem[] = runs.map((run) => ({
+            id: `msg_system_${run.run_id}`,
+            role: "system",
+            createdAt: Date.now(),
+            run,
+          }));
+
+          // Atualizar página com mensagens do sistema (sem a de processamento)
+          updatePage(pageId, {
+            messages: [...messagesWithoutProcessing, ...systemMessages],
+          });
+          
+          // Forçar atualização
+          setUpdateTrigger((prev) => prev + 1);
+          
+          // Aguardar que a resposta apareça na tela antes de processar o próximo PDF
+          // Verificar se a mensagem de processamento foi substituída por uma mensagem de resultado
+          if (!isLast) {
+            console.log(`[Page] Aguardando resposta aparecer na tela antes de processar próximo PDF...`);
+            // Aguardar um pouco mais para garantir que o React renderizou a atualização
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            // Verificar se a mensagem de processamento foi removida
+            let attempts = 0;
+            const maxAttempts = 20; // 2 segundos máximo
+            while (attempts < maxAttempts) {
+              const checkPages = storage.loadPages();
+              const checkPage = checkPages.find((p) => p.id === pageId);
+              if (checkPage) {
+                const hasProcessingMessage = checkPage.messages.some(
+                  (msg) => msg.id === processingMessageId
+                );
+                const hasResultMessage = checkPage.messages.some(
+                  (msg) => msg.role === "system" && 
+                           msg.run && 
+                           msg.run.status !== "processing" &&
+                           (msg.run.status === "completed" || msg.run.status === "error")
+                );
+                
+                // Se não tem mais mensagem de processamento E tem mensagem de resultado, pode continuar
+                if (!hasProcessingMessage && hasResultMessage) {
+                  console.log(`[Page] Resposta apareceu na tela, continuando para próximo PDF`);
+                  break;
+                }
+              }
+              await new Promise(resolve => setTimeout(resolve, 100));
+              attempts++;
+            }
+          }
         }
-
-        // Buscar página atualizada do estado (não do storage, que pode estar desatualizado)
-        const updatedPages = storage.loadPages();
-        const finalPage = updatedPages.find((p) => p.id === pageId);
-        
-        if (!finalPage) {
-          console.error("Página não encontrada após extração");
-          return;
-        }
-
-        // Remover mensagem de processamento e adicionar resultados
-        const messagesWithoutProcessing = finalPage.messages.filter(
-          (msg) => msg.id !== processingMessageId && !msg.id?.startsWith("msg_processing_")
-        );
-
-        // Criar mensagens do sistema para cada run
-        const systemMessages: MessageSystem[] = runs.map((run) => ({
-          id: `msg_system_${run.run_id}`,
-          role: "system",
-          createdAt: Date.now(),
-          run,
-        }));
-
-        // Atualizar página com mensagens do sistema (sem a de processamento)
-        updatePage(pageId, {
-          messages: [...messagesWithoutProcessing, ...systemMessages],
-        });
-        
-        // Forçar atualização
-        setUpdateTrigger((prev) => prev + 1);
       } catch (err: any) {
         console.error("Erro ao extrair:", err);
         
         // Adicionar mensagem de erro
-        // Usar pageId do escopo externo (definido no início do try)
         const errorPages = storage.loadPages();
         const errorPage = errorPages.find((p) => p.id === pageId);
         
         if (errorPage) {
-          // Remover mensagem de processamento
+          // Remover mensagens de processamento
           const messagesWithoutProcessing = errorPage.messages.filter(
-            (msg) => msg.id !== processingMessageId && !msg.id?.startsWith("msg_processing_")
+            (msg) => !msg.id?.startsWith("msg_processing_")
           );
           
           const errorMessage: MessageSystem = {
@@ -347,7 +402,7 @@ export default function Home() {
         {currentPage && (
           <div className="border-b border-[#404040] px-4 py-2 flex items-center justify-between bg-[#000000]">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-[#e5e5e5]">Graph Extractor</span>
+              <span className="text-sm text-[#e5e5e5]">PDF Extractor</span>
             </div>
             <DevModeToggle value={devMode} onChange={setDevMode} />
           </div>

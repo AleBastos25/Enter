@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Graph Extractor UI',
-  description: 'UI para extração de dados de PDFs usando Graph Extractor',
+  title: 'PDF Extractor UI',
+  description: 'UI para extração de dados de PDFs usando PDF Extractor',
 }
 
 export default function RootLayout({

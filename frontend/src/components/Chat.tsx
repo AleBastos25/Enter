@@ -30,16 +30,16 @@ export function Chat({ page, devMode, onRetry }: ChatProps) {
     return (
       <div className="flex-1 flex items-center justify-center text-[#9ca3af] bg-[#000000]">
         <div className="text-center">
-          <div className="text-2xl font-semibold mb-2 text-white">Graph Extractor</div>
-          <div className="text-sm">Selecione uma conversa ou crie uma nova extração</div>
+          <div className="text-2xl font-semibold mb-2 text-white">PDF Extractor</div>
+          <div className="text-sm">Selecione uma sessão ou crie uma nova extração</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 bg-[#000000]">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="h-full overflow-y-auto p-6 bg-[#000000]">
+      <div className="max-w-4xl mx-auto space-y-6">
         {page.messages.length === 0 ? (
           <div className="text-center text-[#9ca3af] py-8">
             Nenhuma mensagem ainda. Envie um documento para começar.

@@ -1171,3 +1171,201 @@ class ValueNoLabelConnectionsRule(BaseRule):
                                     del context.value_to_label[old_value_id]
                                 del context.label_to_value[neighbor_id]
 
+
+class AdjacentHeadersToLabelValueRule(BaseRule):
+    """Passagem FINAL 11: Converte HEADERs adjacentes em LABEL + VALUE.
+    
+    Detecta casos onde dois HEADERs estão lado a lado ou um abaixo do outro,
+    mas na verdade deveriam ser LABEL + VALUE (ex: "Sistema" -> "Consignado").
+    Isso acontece quando o OCR não diferencia negrito, então ambos são classificados como HEADER.
+    """
+    
+    def __init__(self):
+        super().__init__(name="AdjacentHeadersToLabelValueRule", priority=200)
+    
+    def apply(self, context: RuleContext) -> None:
+        """Converte pares de HEADERs adjacentes em LABEL + VALUE."""
+        # Encontrar todos os HEADERs
+        headers = []
+        for token in context.tokens:
+            token_id = token.id
+            current_role = context.get_role(token_id)
+            if current_role == "HEADER":
+                headers.append(token)
+        
+        
+        # Para cada HEADER, verificar se tem outro HEADER adjacente
+        for header1 in headers:
+            header1_id = header1.id
+            header1_bbox = header1.bbox
+            header1_text = header1.text.strip()
+            
+            # Verificar se este HEADER já tem um VALUE filho
+            has_value_child = False
+            for edge in context.graph.get_edges_from(header1_id):
+                child_id = edge.to_id
+                child_role = context.get_role(child_id)
+                if child_role == "VALUE":
+                    has_value_child = True
+                    break
+            
+            # Se já tem VALUE, pular
+            if has_value_child:
+                continue
+            
+            # Procurar HEADERs adjacentes (south ou east)
+            # Também procurar tokens sem role (None) que podem ser HEADERs não classificados
+            best_candidate = None
+            best_distance = float('inf')
+            
+            # Primeiro procurar em HEADERs existentes
+            for header2 in headers:
+                header2_id = header2.id
+                if header2_id == header1_id:
+                    continue
+                
+                header2_bbox = header2.bbox
+                
+                # Verificar se está abaixo (south) - mesmo X aproximadamente
+                x_overlap = not (header2_bbox.x1 < header1_bbox.x0 or header2_bbox.x0 > header1_bbox.x1)
+                is_below = header2_bbox.y0 > header1_bbox.y1
+                vertical_distance = header2_bbox.y0 - header1_bbox.y1 if is_below else float('inf')
+                
+                # Verificar se está à direita (east) - mesmo Y aproximadamente
+                y_overlap = not (header2_bbox.y1 < header1_bbox.y0 or header2_bbox.y0 > header1_bbox.y1)
+                is_right = header2_bbox.x0 > header1_bbox.x1
+                horizontal_distance = header2_bbox.x0 - header1_bbox.x1 if is_right else float('inf')
+                
+                # Considerar adjacente se:
+                # 1. Está abaixo com overlap em X e distância vertical pequena (< 3x altura do header1)
+                # 2. Está à direita com overlap em Y e distância horizontal pequena (< 3x largura do header1)
+                header1_height = header1_bbox.y1 - header1_bbox.y0
+                header1_width = header1_bbox.x1 - header1_bbox.x0
+                
+                is_adjacent = False
+                distance = float('inf')
+                
+                if is_below and x_overlap and vertical_distance < header1_height * 3:
+                    is_adjacent = True
+                    distance = vertical_distance
+                elif is_right and y_overlap and horizontal_distance < header1_width * 3:
+                    is_adjacent = True
+                    distance = horizontal_distance
+                
+                if is_adjacent and distance < best_distance:
+                    # Verificar se header2 também não tem VALUE filho
+                    has_value_child2 = False
+                    for edge in context.graph.get_edges_from(header2_id):
+                        child_id = edge.to_id
+                        child_role = context.get_role(child_id)
+                        if child_role == "VALUE":
+                            has_value_child2 = True
+                            break
+                    
+                    if not has_value_child2:
+                        best_candidate = header2
+                        best_distance = distance
+            
+            # Se não encontrou em HEADERs, procurar em tokens sem role (None) que podem ser HEADERs não classificados
+            if not best_candidate:
+                for token2 in context.tokens:
+                    token2_id = token2.id
+                    if token2_id == header1_id:
+                        continue
+                    
+                    token2_role = context.get_role(token2_id)
+                    # Considerar tokens sem role (None) ou com role genérico que podem ser HEADERs
+                    if token2_role not in ("HEADER", None):
+                        continue
+                    
+                    token2_bbox = token2.bbox
+                    
+                    # Verificar se está abaixo (south) - mesmo X aproximadamente
+                    x_overlap = not (token2_bbox.x1 < header1_bbox.x0 or token2_bbox.x0 > header1_bbox.x1)
+                    is_below = token2_bbox.y0 > header1_bbox.y1
+                    vertical_distance = token2_bbox.y0 - header1_bbox.y1 if is_below else float('inf')
+                    
+                    # Verificar se está à direita (east) - mesmo Y aproximadamente
+                    y_overlap = not (token2_bbox.y1 < header1_bbox.y0 or token2_bbox.y0 > header1_bbox.y1)
+                    is_right = token2_bbox.x0 > header1_bbox.x1
+                    horizontal_distance = token2_bbox.x0 - header1_bbox.x1 if is_right else float('inf')
+                    
+                    # Verificar se está na mesma linha ou próxima (overlap em Y)
+                    same_line = y_overlap
+                    vertical_diff = abs(token2_bbox.y0 - header1_bbox.y0)  # Diferença vertical absoluta
+                    
+                    header1_height = header1_bbox.y1 - header1_bbox.y0
+                    header1_width = header1_bbox.x1 - header1_bbox.x0
+                    
+                    is_adjacent = False
+                    distance = float('inf')
+                    
+                    if is_below and x_overlap and vertical_distance < header1_height * 3:
+                        is_adjacent = True
+                        distance = vertical_distance
+                    elif is_right and y_overlap and horizontal_distance < header1_width * 3:
+                        is_adjacent = True
+                        distance = horizontal_distance
+                    elif same_line and x_overlap and vertical_diff < header1_height * 2:
+                        # Mesma linha ou próxima com overlap em X
+                        is_adjacent = True
+                        distance = vertical_diff
+                    
+                    if is_adjacent and distance < best_distance:
+                        # Verificar se token2 não tem VALUE filho
+                        has_value_child2 = False
+                        for edge in context.graph.get_edges_from(token2_id):
+                            child_id = edge.to_id
+                            child_role = context.get_role(child_id)
+                            if child_role == "VALUE":
+                                has_value_child2 = True
+                                break
+                        
+                        if not has_value_child2:
+                            best_candidate = token2
+                            best_distance = distance
+            
+            # Se encontrou candidato adjacente, converter em LABEL + VALUE
+            if best_candidate:
+                header2_id = best_candidate.id
+                
+                # Converter header1 em LABEL
+                context.set_role(header1_id, "LABEL", source_rule="AdjacentHeadersToLabelValueRule")
+                if header1_id not in context.label_candidates:
+                    context.label_candidates.append(header1_id)
+                
+                # Converter header2 em VALUE
+                context.set_role(header2_id, "VALUE", source_rule="AdjacentHeadersToLabelValueRule")
+                
+                # Criar associação LABEL -> VALUE
+                context.label_to_value[header1_id] = header2_id
+                context.value_to_label[header2_id] = header1_id
+                
+                # IMPORTANTE: Atualizar o role do token diretamente também
+                # (para garantir que o extractor veja o role atualizado)
+                header1_token = context.get_node_by_id(header1_id)
+                header2_token = context.get_node_by_id(header2_id)
+                if header1_token:
+                    header1_token.role = "LABEL"
+                if header2_token:
+                    header2_token.role = "VALUE"
+                
+                # Garantir que há edge entre eles no grafo
+                # Verificar se já existe edge
+                has_edge = False
+                for edge in context.graph.get_edges_from(header1_id):
+                    if edge.to_id == header2_id:
+                        has_edge = True
+                        break
+                
+                if not has_edge:
+                    # Adicionar edge (south ou east, dependendo da posição)
+                    header2_bbox = best_candidate.bbox
+                    is_below = header2_bbox.y0 > header1_bbox.y1
+                    relation = "south" if is_below else "east"
+                    
+                    from src.graph_builder.models import Edge
+                    edge = Edge(from_id=header1_id, to_id=header2_id, relation=relation)
+                    context.graph.add_edge(edge)
+                    # AdjacencyMatrix.add_edge espera apenas o Edge
+                    context.adjacency.add_edge(edge)

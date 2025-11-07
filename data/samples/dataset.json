@@ -43,7 +43,7 @@
       "label": "tela_sistema",
       "extraction_schema": {
         "data_base": "Data base da operação selectionada",
-        "data_verncimento": "Data de vencimento da operação selectionada",
+        "data_vencimento": "Data de vencimento da operação selectionada",
         "quantidade_parcelas": "Quantidade de parcelas da operação selectionada",
         "produto": "Produto da operação selectionada",
         "sistema": "Sistema da operação selectionada",

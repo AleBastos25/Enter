@@ -9,7 +9,8 @@ interface InputBarProps {
   onSend: (
     label: string,
     schema: Record<string, string>,
-    pdfFiles: File[]
+    pdfFiles: File[],
+    schemaJsonString?: string // Texto JSON original do schema
   ) => void;
   recentLabels: string[];
   disabled?: boolean;
@@ -30,6 +31,7 @@ export function InputBar({
   const [labelFile, setLabelFile] = useState<File | null>(null);
   const [schema, setSchema] = useState<Record<string, string> | null>(null);
   const [schemaFile, setSchemaFile] = useState<File | null>(null);
+  const [schemaJsonString, setSchemaJsonString] = useState<string | null>(null); // Texto JSON original
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [showSchemaPopup, setShowSchemaPopup] = useState(false);
   const [showSchemaEditor, setShowSchemaEditor] = useState(false);
@@ -80,6 +82,8 @@ export function InputBar({
       try {
         const text = await file.text();
         console.log("[InputBar] Arquivo de schema lido, tamanho:", text.length);
+        // Salvar texto JSON original
+        setSchemaJsonString(text);
         const parsed = JSON.parse(text);
         console.log("[InputBar] Schema parseado, tipo:", typeof parsed, "é array?", Array.isArray(parsed));
         console.log("[InputBar] Schema parseado:", parsed);
@@ -117,6 +121,8 @@ export function InputBar({
           const firstItem = validItems[0];
           setLabel(firstItem.label);
           setSchema(firstItem.extraction_schema);
+          // Para dataset, salvar o texto JSON original da lista completa
+          setSchemaJsonString(text);
           
           return;
         }
@@ -134,9 +140,13 @@ export function InputBar({
           if (parsed.label && typeof parsed.label === "string") {
             setLabel(parsed.label);
           }
+          // Salvar o texto JSON original do objeto completo
+          setSchemaJsonString(text);
         } else {
           // Objeto simples com campos de schema
           setSchema(parsed);
+          // Salvar o texto JSON original
+          setSchemaJsonString(text);
         }
         
         // Limpar dataset se estava usando
@@ -155,6 +165,8 @@ export function InputBar({
   const handleSchemaManual = (manualSchema: Record<string, string>) => {
     setSchema(manualSchema);
     setSchemaFile(null);
+    // Salvar texto JSON original do schema manual
+    setSchemaJsonString(JSON.stringify(manualSchema, null, 2));
     // Limpar dataset quando usar schema manual
     setDatasetItems(null);
     setSelectedDatasetIndex(null);
@@ -251,6 +263,8 @@ export function InputBar({
         return;
       }
       setSchema(parsed);
+      // Salvar texto JSON original editado
+      setSchemaJsonString(schemaEditorText);
       setShowSchemaEditor(false);
     } catch (err) {
       alert("JSON inválido. Verifique a sintaxe.");
@@ -339,7 +353,9 @@ export function InputBar({
           
           // Enviar este PDF e aguardar resposta completa
           // Passar um flag para não criar nova sessão se já houver uma
-          await onSend(pair.label, pair.schema, [pair.pdf]);
+          // Para dataset, passar o texto JSON original da lista completa
+          const pairSchemaJson = schemaJsonString || JSON.stringify(pair.schema, null, 2);
+          await onSend(pair.label, pair.schema, [pair.pdf], pairSchemaJson);
           
           // Aguardar um pouco para garantir que a resposta apareceu na tela
           // e que o estado foi atualizado antes de enviar o próximo
@@ -351,10 +367,11 @@ export function InputBar({
         }
         console.log("[InputBar] Todos os PDFs enviados com sucesso");
         
-        // Limpar campos apenas após todos os envios serem concluídos
+        // Limpar apenas PDFs e label após todos os envios serem concluídos
+        // Manter schema visível para que possa ser atualizado/acumulado
         setLabel("");
-        setSchema(null);
         setPdfFiles([]);
+        // Não limpar schema, schemaFile, schemaJsonString - permite reutilizar e atualizar
       } catch (err) {
         console.error("[InputBar] Erro ao enviar PDFs:", err);
         throw err;
@@ -370,10 +387,10 @@ export function InputBar({
       return;
     }
     
-    console.log("[InputBar] Validação passou, preparando para enviar...");
+      console.log("[InputBar] Validação passou, preparando para enviar...");
     
     try {
-      // Limpar após enviar (mas não aguardar)
+      // Salvar valores antes de enviar (não limpar ainda)
       const currentLabel = label;
       const currentSchema = schema;
       const currentPdfFiles = [...pdfFiles];
@@ -383,23 +400,27 @@ export function InputBar({
       console.log("[InputBar]   - Schema keys:", typeof currentSchema === "object" ? Object.keys(currentSchema) : "string");
       console.log("[InputBar]   - PDFs:", currentPdfFiles.map(f => `${f.name} (${f.size} bytes)`));
       
-      setLabel("");
-      setSchema(null);
-      setSchemaFile(null);
-      setPdfFiles([]);
-      // Não limpar datasetItems - permite reutilizar o mesmo dataset
-      
-      // Chamar onSend
+      // Chamar onSend e aguardar conclusão antes de limpar
       console.log("[InputBar] Aguardando onSend...");
-      await onSend(currentLabel, currentSchema, currentPdfFiles);
+      // Passar texto JSON original do schema (ou converter se não tiver)
+      const currentSchemaJson = schemaJsonString || JSON.stringify(currentSchema, null, 2);
+      await onSend(currentLabel, currentSchema, currentPdfFiles, currentSchemaJson);
       console.log("[InputBar] onSend concluído");
-    } catch (err) {
+      
+      // Limpar apenas PDFs e label após sucesso
+      // Manter schema visível para que possa ser atualizado/acumulado
+      setLabel("");
+      setPdfFiles([]);
+      // Não limpar schema, schemaFile, schemaJsonString - permite reutilizar e atualizar
+      // Não limpar datasetItems - permite reutilizar o mesmo dataset
+    } catch (err: any) {
       console.error("[InputBar] Erro ao enviar:", err);
       console.error("[InputBar] Tipo do erro:", err?.constructor?.name);
       console.error("[InputBar] Mensagem:", err?.message);
       if (err?.stack) {
         console.error("[InputBar] Stack:", err.stack);
       }
+      // Não limpar campos em caso de erro - permite tentar novamente
     }
   };
 

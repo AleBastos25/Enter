@@ -18,6 +18,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [devMode, setDevMode] = useState(false);
   const [updateTrigger, setUpdateTrigger] = useState(0);
+  const [lastSchema, setLastSchema] = useState<Record<string, string> | null>(null);
 
   const { pages, folders, addPage, updatePage, deletePage, isLoaded } =
     useSessionStorage();
@@ -79,12 +80,14 @@ export default function Home() {
     async (
       label: string,
       schema: Record<string, string>,
-      pdfFiles: File[]
+      pdfFiles: File[],
+      schemaJsonString?: string // Texto JSON original do schema
     ) => {
       console.log("[Page] handleSend chamado");
       console.log("[Page] Label:", label);
       console.log("[Page] Schema:", schema);
       console.log("[Page] PDFs:", pdfFiles.map(f => f.name));
+      console.log("[Page] lastSchema atual:", lastSchema);
       
       // Declarar pageId fora do try para usar no catch
       // Usar a sessão atual se existir, senão criar uma nova apenas uma vez
@@ -112,6 +115,8 @@ export default function Home() {
           pageId = newPage.id;
           page = newPage;
           setCurrentPageId(pageId);
+          // Resetar lastSchema ao criar nova sessão
+          setLastSchema(null);
           console.log(`[Page] Nova sessão criada: ${pageId}`);
         } else {
           // Buscar página existente (primeiro do estado, depois do storage)
@@ -136,6 +141,100 @@ export default function Home() {
         
         // Atualizar pageId para usar na próxima iteração (se houver múltiplos PDFs)
         // Isso garante que todos os PDFs vão para a mesma sessão
+
+        // Verificar se o schema mudou comparando com o último schema enviado no chat
+        // SEMPRE verificar nas mensagens do chat (fonte de verdade) para evitar duplicações
+        const currentPagesForSchema = storage.loadPages();
+        const currentPageForSchema = currentPagesForSchema.find((p) => p.id === pageId) || page;
+        const schemaMessages = currentPageForSchema.messages
+          .filter((msg): msg is MessageUser => msg.role === "user" && msg.payload.isSchemaOnly === true)
+          .sort((a, b) => b.createdAt - a.createdAt); // Ordenar do mais recente para o mais antigo
+        
+        const lastSchemaMessage = schemaMessages[0]; // Pegar o mais recente
+        
+        // Verificar se há uma mensagem de schema muito recente (últimos 2 segundos) - pode ser duplicação
+        const now = Date.now();
+        const veryRecentSchemaMessage = schemaMessages.find(msg => (now - msg.createdAt) < 2000);
+        if (veryRecentSchemaMessage) {
+          console.log("[Page] Mensagem de schema muito recente encontrada (possível duplicação), ignorando verificação");
+          // Não adicionar schema se já foi adicionado muito recentemente
+          schemaChanged = false;
+        }
+        
+        // Normalizar JSON para comparação (remove diferenças de formatação)
+        const normalizeJson = (json: string) => {
+          try {
+            const parsed = JSON.parse(json);
+            return JSON.stringify(parsed, Object.keys(parsed).sort()); // Ordenar chaves para comparação consistente
+          } catch {
+            return json.trim();
+          }
+        };
+        
+        const newSchemaText = schemaJsonString || JSON.stringify(schema, null, 2);
+        const normalizedNewSchema = normalizeJson(newSchemaText);
+        
+        // Comparar com o último schema enviado no chat
+        let schemaChanged = false;
+        
+        // Se não há mensagem muito recente, fazer a comparação normal
+        if (!veryRecentSchemaMessage) {
+          if (!lastSchemaMessage || !lastSchemaMessage.payload.schema) {
+            // Se não há schema anterior no chat, considerar como mudança
+            schemaChanged = true;
+            console.log("[Page] Nenhum schema anterior encontrado no chat, considerando como mudança");
+          } else {
+            // Comparar com o schema das mensagens (fonte de verdade)
+            const lastSchemaText = typeof lastSchemaMessage.payload.schema === 'string'
+              ? lastSchemaMessage.payload.schema
+              : JSON.stringify(lastSchemaMessage.payload.schema, null, 2);
+            const normalizedLastSchema = normalizeJson(lastSchemaText);
+            schemaChanged = normalizedLastSchema !== normalizedNewSchema;
+            
+            console.log("[Page] Comparando schemas:");
+            console.log("[Page]   Último schema (normalizado):", normalizedLastSchema.substring(0, 100) + "...");
+            console.log("[Page]   Novo schema (normalizado):", normalizedNewSchema.substring(0, 100) + "...");
+            console.log("[Page]   Schemas são diferentes?", schemaChanged);
+          }
+        }
+        
+        // Só adicionar mensagem de schema UMA VEZ se houver mudança (antes de processar todos os PDFs)
+        if (schemaChanged) {
+          console.log("[Page] Schema mudou, adicionando mensagem de schema UMA VEZ antes de processar", pdfFiles.length, "PDF(s)");
+          
+          // Adicionar mensagem de usuário mostrando o schema (à direita)
+          // Usar o texto JSON original se fornecido, senão converter o schema
+          const schemaText = schemaJsonString || JSON.stringify(schema, null, 2);
+          const schemaMessage: MessageUser = {
+            id: `msg_schema_${Date.now()}`,
+            role: "user",
+            createdAt: Date.now(),
+            payload: {
+              label: "",
+              schemaName: "Schema JSON",
+              pdfFiles: [],
+              schema: schemaText, // Salvar como string JSON original
+              isSchemaOnly: true,
+            },
+          };
+          
+          // Buscar página atualizada antes de adicionar mensagem
+          const updatedPagesForSchema = storage.loadPages();
+          const updatedPageForSchema = updatedPagesForSchema.find((p) => p.id === pageId) || currentPageForSchema;
+          
+          updatePage(pageId, {
+            messages: [...updatedPageForSchema.messages, schemaMessage],
+          });
+          setUpdateTrigger((prev) => prev + 1);
+          
+          // Atualizar último schema no estado (para referência futura)
+          setLastSchema(schema);
+          
+          // Aguardar um pouco para a mensagem aparecer antes de processar os PDFs
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } else {
+          console.log("[Page] Schema não mudou, não adicionando mensagem de schema");
+        }
 
         // Processar PDFs sequencialmente (ping-pong: um PDF → resposta → próximo PDF → resposta)
         for (let i = 0; i < pdfFiles.length; i++) {

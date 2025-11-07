@@ -31,7 +31,7 @@ export function Chat({ page, devMode, onRetry }: ChatProps) {
       <div className="flex-1 flex items-center justify-center text-[#9ca3af] bg-[#000000]">
         <div className="text-center">
           <div className="text-2xl font-semibold mb-2 text-white">PDF Extractor</div>
-          <div className="text-sm">Selecione uma sessão ou crie uma nova extração</div>
+          <div className="text-sm">Selecione uma sessão ou crie uma nova </div>
         </div>
       </div>
     );

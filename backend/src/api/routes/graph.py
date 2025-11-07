@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse, FileResponse
 
 # Adicionar raiz do projeto ao path
 # backend/src/api/routes/graph.py
@@ -44,9 +44,9 @@ async def get_graph_html(run_id: str):
     if html_path is None or not html_path.exists():
         raise HTTPException(status_code=404, detail=f"Grafo não encontrado para run_id: {run_id}")
     
-    return FileResponse(
-        path=str(html_path),
-        media_type="text/html",
-        filename=f"{run_id}.html"
-    )
+    # Ler conteúdo do HTML e retornar como HTMLResponse (não força download)
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    
+    return HTMLResponse(content=html_content)
 

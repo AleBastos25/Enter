@@ -21,6 +21,8 @@ export type MessageUser = {
     label: string;
     schemaName: string; // "Manual" ou nome do arquivo
     pdfFiles: { name: string; size: number }[];
+    schema?: Record<string, string> | string; // Schema JSON (objeto ou string JSON original)
+    isSchemaOnly?: boolean; // Indica se é apenas uma mensagem de schema (sem PDF)
   };
 };
 

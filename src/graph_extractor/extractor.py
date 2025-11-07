@@ -301,12 +301,16 @@ class GraphSchemaExtractor:
             graph = self.graph_builder.build(tokens)
             
             # Classificar roles
-            roles, _ = self.role_classifier.classify(tokens, graph, label=label)
+            roles, tables = self.role_classifier.classify(tokens, graph, label=label)
             
             # Aplicar roles aos tokens
             for token in tokens:
                 if token.id in roles:
                     token.role = roles[token.id]
+            
+            # Verificar e corrigir padrão específico de tabelas verticais
+            # onde há labels sem values correspondentes (values "apagados")
+            self._fix_missing_table_values(tokens, graph, tables)
             
             return graph
             
@@ -952,8 +956,7 @@ class GraphSchemaExtractor:
     ) -> bool:
         """Valida se o valor corresponde ao tipo esperado do schema.
         
-        Verifica se o valor extraído corresponde às hints relevantes do schema.
-        Por exemplo, se o schema espera telefone, verifica se o valor é realmente um telefone.
+        Usa classificação por embedding primeiro (mais inteligente), depois fallback para hints.
         
         Args:
             value: Valor extraído a validar
@@ -964,11 +967,74 @@ class GraphSchemaExtractor:
             True se o valor corresponde ao tipo esperado, False caso contrário
         """
         from src.graph_extractor.hints.base import hint_registry
+        import re
         
         if not value:
             return False
         
-        # Encontrar hints relevantes para o campo
+        # 1. Tentar classificação por embedding primeiro (mais inteligente)
+        expected_type = self._get_expected_type_name(field_name, field_description)
+        
+        if expected_type:
+            # Validar baseado no tipo classificado
+            value_lower = value.strip().lower()
+            
+            if expected_type == "data":
+                # Validar formato de data
+                date_pattern = re.compile(
+                    r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|"  # DD/MM/YYYY
+                    r"\d{4}-\d{2}-\d{2}"  # YYYY-MM-DD
+                )
+                return bool(date_pattern.search(value))
+            
+            elif expected_type == "valor monetário" or expected_type == "dinheiro":
+                # Aceitar valores monetários ou números simples
+                money_pattern = re.compile(
+                    r"(?:R\s*\$|US\s*\$|\$|€|£|BRL|USD|EUR|GBP)?\s*"
+                    r"(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+[.,]\d{2}|\d+)",
+                    re.IGNORECASE
+                )
+                # Também aceitar números simples (sem símbolo monetário)
+                if money_pattern.search(value) or re.match(r'^\d+(?:[.,]\d+)?$', value.strip()):
+                    return True
+                return False
+            
+            elif expected_type == "telefone":
+                # Validar formato de telefone
+                phone_pattern = re.compile(
+                    r"[\d\s\(\)\-\+]{8,}"  # Números, espaços, parênteses, hífens, +
+                )
+                return bool(phone_pattern.search(value)) and len(re.findall(r'\d', value)) >= 8
+            
+            elif expected_type == "endereço":
+                # Endereços são mais complexos, usar hint específica
+                address_hint = None
+                for hint in hint_registry.find_relevant(field_name, field_description):
+                    if hint.name == "address":
+                        address_hint = hint
+                        break
+                if address_hint:
+                    return address_hint.detect(value)
+                # Se não tem hint, aceitar (endereços são difíceis de validar)
+                return True
+            
+            elif expected_type == "email":
+                email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+                return bool(email_pattern.search(value))
+            
+            elif expected_type == "CPF ou CNPJ":
+                # Validar CPF ou CNPJ
+                cpf_cnpj_pattern = re.compile(r'\d{11}|\d{14}|\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2}')
+                return bool(cpf_cnpj_pattern.search(value))
+            
+            elif expected_type == "número":
+                # Aceitar números simples
+                return bool(re.match(r'^\d+(?:[.,]\d+)?$', value.strip()))
+            
+            # Para outros tipos, aceitar (não temos validação específica)
+            return True
+        
+        # 2. Fallback: usar hints tradicionais
         relevant_hints = hint_registry.find_relevant(field_name, field_description)
         
         # Se não há hints específicas, aceitar qualquer valor
@@ -986,24 +1052,177 @@ class GraphSchemaExtractor:
                 return True
         
         # Nenhuma hint específica detectou o valor
-        # Se há hints específicas mas nenhuma detectou, rejeitar
+        # Se há hints específicas mas nenhuma detectou, verificar casos especiais
+        
         has_specific_hints = any(h.name not in ("text", "name") for h in relevant_hints)
         if has_specific_hints:
+            # Caso especial: se hint é "money" mas o valor é um número válido, aceitar
+            has_money_hint = any(h.name == "money" for h in relevant_hints)
+            if has_money_hint:
+                # Verificar se é um número válido (inteiro ou decimal)
+                if re.match(r'^\d+(?:[.,]\d+)?$', value.strip()):
+                    return True
+            
+            # Para outros tipos específicos (date, phone, address), rejeitar se não detectou
             return False
         
         # Apenas hints genéricas (text/name) - aceitar
         return True
     
-    def _get_expected_type_name(self, field_name: str, field_description: str) -> Optional[str]:
-        """Obtém o nome do tipo esperado para um campo (baseado nas hints).
+    def _classify_field_type_with_embedding(
+        self,
+        field_name: str,
+        field_description: str
+    ) -> Optional[str]:
+        """Classifica o tipo esperado do campo usando embedding semântico.
+        
+        Compara a descrição do campo com descrições típicas de cada tipo usando embedding.
+        Mais inteligente que apenas palavras-chave, pois entende semântica.
         
         Args:
             field_name: Nome do campo
             field_description: Descrição do campo
             
         Returns:
-            Nome do tipo esperado (ex: "endereço", "telefone") ou None
+            Nome do tipo esperado (ex: "data", "dinheiro", "telefone") ou None
         """
+        # Tipos clássicos com descrições típicas (mais específicas e representativas)
+        type_descriptions = {
+            "data": [
+                "data de vencimento", "data de nascimento", "data de emissão",
+                "data base", "data de referência", "data inicial", "data final",
+                "data de criação", "data de atualização", "data de expiração",
+                "vencimento", "expiração", "prazo", "período", "dia mês ano",
+                "calendário", "timestamp", "formato de data"
+            ],
+            "dinheiro": [
+                "valor monetário", "preço em reais", "custo em dinheiro", "total em reais",
+                "subtotal monetário", "saldo bancário", "montante financeiro",
+                "valor da parcela em reais", "quantia em dinheiro", "dinheiro real",
+                "R$", "valor pago", "receita financeira", "despesa monetária"
+            ],
+            "telefone": [
+                "telefone celular", "número de telefone", "contato telefônico",
+                "telefone fixo", "celular", "whatsapp", "número para ligar",
+                "contato por telefone", "telefone de contato"
+            ],
+            "endereço": [
+                "endereço completo", "rua e número", "avenida com número",
+                "logradouro completo", "localização física", "endereço residencial",
+                "cidade estado CEP", "bairro cidade", "endereço postal"
+            ],
+            "email": [
+                "email eletrônico", "endereço de email", "correio eletrônico",
+                "e-mail para contato", "email profissional", "conta de email"
+            ],
+            "nome": [
+                "nome completo da pessoa", "nome do profissional", "nome pessoal",
+                "identificação por nome", "razão social", "nome de identificação"
+            ],
+            "CPF_CNPJ": [
+                "CPF cadastro pessoa física", "CNPJ cadastro nacional",
+                "documento de identificação", "número de CPF", "número de CNPJ",
+                "identificação fiscal", "documento fiscal"
+            ],
+            "hora": [
+                "hora do dia", "horário específico", "tempo do dia",
+                "hora minutos", "horário de funcionamento", "momento do dia"
+            ],
+            "número": [
+                "quantidade numérica", "contagem de itens", "número total",
+                "quantidade de elementos", "contagem simples", "número inteiro",
+                "quantidade sem unidade", "número puro"
+            ],
+            "sigla": [
+                "sigla abreviada", "código identificador", "código curto",
+                "abreviação de texto", "identificador curto", "código alfanumérico"
+            ]
+        }
+        
+        # Criar query combinando nome e descrição
+        query_text = f"{field_name} {field_description}".lower()
+        
+        # Gerar embedding da query
+        query_embedding = self.embedding_matcher._get_embedding(query_text)
+        if query_embedding is None:
+            return None
+        
+        # Comparar com cada tipo
+        best_type = None
+        best_score = 0.0
+        
+        for type_name, descriptions in type_descriptions.items():
+            # Criar texto representativo do tipo (todas as descrições combinadas)
+            type_text = " ".join(descriptions)
+            
+            # Gerar embedding do tipo
+            type_embedding = self.embedding_matcher._get_embedding(type_text)
+            if type_embedding is None:
+                continue
+            
+            # Calcular similaridade
+            similarity = self.embedding_matcher._calculate_similarity(query_embedding, type_text)
+            
+            if similarity > best_score:
+                best_score = similarity
+                best_type = type_name
+        
+        # Retornar tipo apenas se similaridade for alta o suficiente
+        # Threshold mais baixo (0.45) para capturar mais casos, mas ainda manter qualidade
+        if best_score >= 0.45:
+            # Se há múltiplos tipos com score similar, preferir tipos mais específicos
+            # Ordem de preferência: data > dinheiro > telefone > endereço > outros
+            type_priority = {
+                "data": 10,
+                "dinheiro": 9,
+                "telefone": 8,
+                "endereço": 7,
+                "email": 6,
+                "CPF_CNPJ": 5,
+                "nome": 4,
+                "hora": 3,
+                "número": 2,
+                "sigla": 1
+            }
+            
+            # Se o melhor tipo tem prioridade alta e score bom, retornar
+            priority = type_priority.get(best_type, 0)
+            if priority >= 5 or best_score >= 0.55:
+                return best_type
+        
+        return None
+    
+    def _get_expected_type_name(self, field_name: str, field_description: str) -> Optional[str]:
+        """Obtém o nome do tipo esperado para um campo.
+        
+        Tenta primeiro classificação por embedding (mais inteligente), depois fallback para hints.
+        
+        Args:
+            field_name: Nome do campo
+            field_description: Descrição do campo
+            
+        Returns:
+            Nome do tipo esperado (ex: "endereço", "telefone", "data") ou None
+        """
+        # Primeiro tentar classificação por embedding (mais inteligente)
+        embedding_type = self._classify_field_type_with_embedding(field_name, field_description)
+        if embedding_type:
+            # Mapear para nomes consistentes
+            type_mapping = {
+                "data": "data",
+                "dinheiro": "valor monetário",
+                "telefone": "telefone",
+                "endereço": "endereço",
+                "email": "email",
+                "nome": "nome",
+                "CPF_CNPJ": "CPF ou CNPJ",
+                "hora": "hora",
+                "número": "número",
+                "sigla": "sigla"
+            }
+            return type_mapping.get(embedding_type, embedding_type)
+        
+        # Fallback: usar hints tradicionais
         from src.graph_extractor.hints.base import hint_registry
         
         relevant_hints = hint_registry.find_relevant(field_name, field_description)
@@ -1023,6 +1242,146 @@ class GraphSchemaExtractor:
                 return type_mapping[hint.name]
         
         return None
+    
+    def _fix_missing_table_values(
+        self,
+        tokens: List[Token],
+        graph: Graph,
+        tables: List
+    ) -> None:
+        """Corrige padrão específico em tabelas verticais onde há labels sem values.
+        
+        Detecta casos onde uma tabela vertical tem múltiplas colunas de labels
+        intercaladas com colunas de values, mas alguns labels não têm values associados
+        (values "apagados").
+        
+        Padrão típico:
+        - Coluna 0: Labels
+        - Coluna 1: Values
+        - Coluna 2: Labels (mas seus values estão "apagados")
+        
+        Nesse caso, os labels da coluna 2 devem ter seus values associados
+        aos values da coluna 1 (mesma linha), compartilhando os mesmos values.
+        
+        Args:
+            tokens: Lista de tokens
+            graph: Grafo completo
+            tables: Lista de tabelas detectadas
+        """
+        from src.graph_builder.table_detector import TableOrientation
+        from src.graph_builder.adjacency import AdjacencyMatrix
+        
+        adjacency = AdjacencyMatrix(graph)
+        
+        for table in tables:
+            # Só processar tabelas verticais
+            if table.orientation != TableOrientation.VERTICAL:
+                continue
+            
+            max_col = max(cell.col for cell in table.cells)
+            if max_col < 1:
+                continue
+            
+            # Para cada coluna par (0, 2, 4, ...) que contém labels
+            # Verificar se a coluna seguinte (ímpar) contém values
+            # E se os labels não têm values associados, associá-los aos values da coluna anterior
+            for label_col in range(0, max_col + 1, 2):  # Colunas pares (0, 2, 4, ...)
+                value_col = label_col + 1
+                
+                if value_col > max_col:
+                    continue
+                
+                label_cells = table.get_col(label_col)
+                value_cells = table.get_col(value_col)
+                
+                if not label_cells or not value_cells:
+                    continue
+                
+                # Verificar se são realmente labels e values
+                are_labels = all(
+                    cell.token.role == "LABEL" for cell in label_cells
+                )
+                are_values = all(
+                    cell.token.role == "VALUE" for cell in value_cells
+                )
+                
+                if not (are_labels and are_values):
+                    continue
+                
+                # Para cada label, verificar se tem value associado
+                # Se não tem, procurar value na coluna anterior (se houver) ou na coluna seguinte
+                for label_cell in label_cells:
+                    label_token = label_cell.token
+                    label_row = label_cell.row
+                    
+                    # Verificar se este label já tem um value associado
+                    has_value = False
+                    for edge in graph.get_edges_from(label_token.id):
+                        child = graph.get_node(edge.to_id)
+                        if child and child.role == "VALUE":
+                            has_value = True
+                            break
+                    
+                    # Se não tem value, procurar value na mesma linha
+                    if not has_value:
+                        # Primeiro tentar coluna seguinte (value_col)
+                        value_cell = table.get_cell(label_row, value_col)
+                        if value_cell:
+                            value_token = value_cell.token
+                            
+                            # Criar associação: label -> value
+                            from src.graph_builder.models import Edge
+                            
+                            # Verificar se já existe edge
+                            has_edge = False
+                            for edge in graph.get_edges_from(label_token.id):
+                                if edge.to_id == value_token.id:
+                                    has_edge = True
+                                    break
+                            
+                            if not has_edge:
+                                # Adicionar edge east (label -> value à direita)
+                                edge = Edge(
+                                    from_id=label_token.id,
+                                    to_id=value_token.id,
+                                    relation="east"
+                                )
+                                graph.add_edge(edge)
+                                adjacency.add_edge(edge)
+                                
+                                # Atualizar role do token se necessário
+                                if label_token.role != "LABEL":
+                                    label_token.role = "LABEL"
+                        else:
+                            # Se não há value na coluna seguinte, tentar coluna anterior
+                            if label_col > 0:
+                                prev_value_col = label_col - 1
+                                prev_value_cell = table.get_cell(label_row, prev_value_col)
+                                if prev_value_cell and prev_value_cell.token.role == "VALUE":
+                                    value_token = prev_value_cell.token
+                                    
+                                    from src.graph_builder.models import Edge
+                                    
+                                    # Verificar se já existe edge
+                                    has_edge = False
+                                    for edge in graph.get_edges_from(label_token.id):
+                                        if edge.to_id == value_token.id:
+                                            has_edge = True
+                                            break
+                                    
+                                    if not has_edge:
+                                        # Adicionar edge west (label -> value à esquerda)
+                                        edge = Edge(
+                                            from_id=label_token.id,
+                                            to_id=value_token.id,
+                                            relation="west"
+                                        )
+                                        graph.add_edge(edge)
+                                        adjacency.add_edge(edge)
+                                        
+                                        # Atualizar role do token se necessário
+                                        if label_token.role != "LABEL":
+                                            label_token.role = "LABEL"
     
     def _collect_all_descendants(self, token: Token, graph: Graph) -> List[Token]:
         """Coleta todos os descendentes de um token (recursivo).
@@ -1299,36 +1658,96 @@ class GraphSchemaExtractor:
                     strategy = f"regex_perfect_label_no_value{strategy_suffix}"
         
         elif token.role == "HEADER":
-            # HEADER → verificar se tem VALUE filho primeiro
-            # Se o campo espera tipo específico (endereço, telefone), verificar se HEADER tem VALUE filho
-            edges = graph.get_edges_from(token.id)
-            header_value_children = []
-            for edge in edges:
-                child = graph.get_node(edge.to_id)
-                if child and child.role == "VALUE":
-                    header_value_children.append(child)
+            # Verificar se o token foi convertido de HEADER para LABEL pela regra AdjacentHeadersToLabelValueRule
+            # (o role pode ter sido atualizado diretamente no token, mas o MatchResult ainda tem o role antigo)
+            current_role = token.role  # Pode ter sido atualizado pela regra
             
-            if header_value_children:
-                # HEADER tem VALUE filho → retornar VALUE após validar tipo
-                candidate_value = header_value_children[0].text.strip()
-                if self._has_specific_hints(field_name, field_description):
-                    if self._validate_value_type(candidate_value, field_name, field_description):
+            # Se foi convertido para LABEL, tratar como LABEL
+            if current_role == "LABEL":
+                # LABEL → buscar VALUE filho
+                value_token = self.regex_matcher._find_value_for_label(token, graph)
+                if value_token:
+                    extracted_value = value_token.text.strip()
+                    strategy = f"regex_perfect_label_value_converted{strategy_suffix}"
+                else:
+                    extracted_value = None
+                    strategy = f"regex_perfect_label_no_value_converted{strategy_suffix}"
+            else:
+                # HEADER → verificar se tem VALUE filho primeiro
+                # Se o campo espera tipo específico (endereço, telefone), verificar se HEADER tem VALUE filho
+                edges = graph.get_edges_from(token.id)
+                header_value_children = []
+                for edge in edges:
+                    child = graph.get_node(edge.to_id)
+                    if child and child.role == "VALUE":
+                        header_value_children.append(child)
+                
+                # Verificar se há HEADERs adjacentes que foram convertidos em VALUE pela regra AdjacentHeadersToLabelValueRule
+                # Procurar por HEADERs próximos (south ou east) que podem ter sido convertidos em VALUE
+                adjacent_value = None
+                if not header_value_children:
+                    # Procurar HEADERs adjacentes que podem ter sido convertidos em VALUE
+                    for edge in edges:
+                        neighbor = graph.get_node(edge.to_id)
+                        if neighbor and neighbor.role == "VALUE":
+                            # Verificar se está próximo (south ou east)
+                            if edge.relation in ("south", "east"):
+                                # Verificar se o neighbor era originalmente um HEADER (pode ter sido convertido)
+                                # Se está próximo e é VALUE, pode ser o resultado da conversão
+                                neighbor_bbox = neighbor.bbox
+                                token_bbox = token.bbox
+                                
+                                # Verificar proximidade
+                                is_below = neighbor_bbox.y0 > token_bbox.y1
+                                is_right = neighbor_bbox.x0 > token_bbox.x1
+                                
+                                if (is_below and edge.relation == "south") or (is_right and edge.relation == "east"):
+                                    # Verificar distância (não muito longe)
+                                    if is_below:
+                                        distance = neighbor_bbox.y0 - token_bbox.y1
+                                        if distance < (token_bbox.y1 - token_bbox.y0) * 3:
+                                            adjacent_value = neighbor
+                                            break
+                                    elif is_right:
+                                        distance = neighbor_bbox.x0 - token_bbox.x1
+                                        if distance < (token_bbox.x1 - token_bbox.x0) * 3:
+                                            adjacent_value = neighbor
+                                            break
+                
+                if adjacent_value:
+                    # HEADER tem VALUE adjacente (convertido pela regra) → retornar VALUE
+                    candidate_value = adjacent_value.text.strip()
+                    if self._has_specific_hints(field_name, field_description):
+                        if self._validate_value_type(candidate_value, field_name, field_description):
+                            extracted_value = candidate_value
+                            strategy = f"regex_perfect_header_converted_to_label_value{strategy_suffix}"
+                        else:
+                            extracted_value = None
+                            strategy = f"regex_perfect_header_converted_type_mismatch{strategy_suffix}"
+                    else:
+                        extracted_value = candidate_value
+                        strategy = f"regex_perfect_header_converted_to_label_value{strategy_suffix}"
+                elif header_value_children:
+                    # HEADER tem VALUE filho → retornar VALUE após validar tipo
+                    candidate_value = header_value_children[0].text.strip()
+                    if self._has_specific_hints(field_name, field_description):
+                        if self._validate_value_type(candidate_value, field_name, field_description):
+                            extracted_value = candidate_value
+                            strategy = f"regex_perfect_header_value{strategy_suffix}"
+                        else:
+                            # HEADER tem VALUE mas tipo não corresponde → retornar null
+                            extracted_value = None
+                            strategy = f"regex_perfect_header_value_type_mismatch{strategy_suffix}"
+                    else:
+                        # Sem hints específicas, aceitar VALUE do HEADER
                         extracted_value = candidate_value
                         strategy = f"regex_perfect_header_value{strategy_suffix}"
-                    else:
-                        # HEADER tem VALUE mas tipo não corresponde → retornar null
-                        extracted_value = None
-                        strategy = f"regex_perfect_header_value_type_mismatch{strategy_suffix}"
                 else:
-                    # Sem hints específicas, aceitar VALUE do HEADER
-                    extracted_value = candidate_value
-                    strategy = f"regex_perfect_header_value{strategy_suffix}"
-            else:
-                # HEADER sem VALUE filho
-                # Se regex é perfeito e não tem filho VALUE, sempre retornar null
-                # (não importa se é tipo específico ou genérico)
-                extracted_value = None
-                strategy = f"regex_perfect_header_no_value{strategy_suffix}"
+                    # HEADER sem VALUE filho
+                    # Se regex é perfeito e não tem filho VALUE, sempre retornar null
+                    # (não importa se é tipo específico ou genérico)
+                    extracted_value = None
+                    strategy = f"regex_perfect_header_no_value{strategy_suffix}"
                 
                 if self.debug and field_name in ("endereco_profissional", "telefone_profissional"):
                     print(f"  HEADER sem VALUE filho: '{token.text.strip()}'")
@@ -1407,13 +1826,24 @@ class GraphSchemaExtractor:
     def _has_specific_hints(self, field_name: str, field_description: str) -> bool:
         """Verifica se o campo tem hints específicas (não genéricas como text/name).
         
+        Usa classificação por embedding primeiro (mais inteligente), depois fallback para hints.
+        
         Args:
             field_name: Nome do campo
             field_description: Descrição do campo
             
         Returns:
-            True se há hints específicas
+            True se há hints específicas ou tipo classificado por embedding
         """
+        # Primeiro verificar se embedding classificou um tipo específico
+        expected_type = self._get_expected_type_name(field_name, field_description)
+        if expected_type:
+            # Tipos genéricos que não requerem validação rigorosa
+            generic_types = {"nome", "texto", "sigla"}
+            if expected_type.lower() not in generic_types:
+                return True
+        
+        # Fallback: usar hints tradicionais
         from src.graph_extractor.hints.base import hint_registry
         
         relevant_hints = hint_registry.find_relevant(field_name, field_description)

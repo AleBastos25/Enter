@@ -88,6 +88,28 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
     );
   }
 
+  // Se for mensagem de schema, mostrar de forma especial
+  if (run.filename === "Schema JSON" && run.result) {
+    return (
+      <div className="flex justify-start mb-4">
+        <div className="bg-[#1a1a2a] border border-[#404040] rounded-lg p-4 max-w-2xl w-full animate-fade-in">
+          <div className="font-semibold mb-2 text-[#FF6B00]">📋 Schema JSON</div>
+          <div className="relative">
+            <pre className="bg-[#000000] border border-[#404040] p-3 rounded text-xs overflow-x-auto text-[#e5e5e5]">
+              {JSON.stringify(run.result, null, 2)}
+            </pre>
+            <button
+              onClick={handleCopy}
+              className="absolute top-2 right-2 px-2 py-1 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded text-xs transition-colors"
+            >
+              {copied ? "Copiado!" : "Copiar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-start mb-4">
       <div className="bg-[#171717] border border-[#404040] rounded-lg p-4 max-w-2xl w-full animate-fade-in">

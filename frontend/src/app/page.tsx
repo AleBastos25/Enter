@@ -7,6 +7,7 @@ import { Chat } from "@/components/Chat";
 import { InputBar } from "@/components/InputBar";
 import { Sidebar } from "@/components/Sidebar";
 import { DevModeToggle } from "@/components/DevModeToggle";
+import { LearningToggle } from "@/components/LearningToggle";
 import { useExtraction } from "@/hooks/useExtraction";
 import { useSessionStorage } from "@/hooks/useSessionStorage";
 import { Page, MessageUser, MessageSystem, RunResult } from "@/lib/types";
@@ -17,8 +18,10 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"pages" | "folders">("pages");
   const [searchQuery, setSearchQuery] = useState("");
   const [devMode, setDevMode] = useState(false);
+  const [useLearning, setUseLearning] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [lastSchema, setLastSchema] = useState<Record<string, string> | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false); // Trava para evitar múltiplas chamadas simultâneas
 
   const { pages, folders, addPage, updatePage, deletePage, isLoaded } =
     useSessionStorage();
@@ -43,10 +46,14 @@ export default function Home() {
     }
   }, [pages.length, currentPageId, isLoaded]);
 
-  // Carregar dev mode do localStorage
+  // Carregar dev mode e use learning do localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       setDevMode(storage.loadDevMode());
+      const savedUseLearning = storage.loadUseLearning();
+      if (savedUseLearning !== null) {
+        setUseLearning(savedUseLearning);
+      }
     }
   }, []);
 
@@ -83,24 +90,89 @@ export default function Home() {
       pdfFiles: File[],
       schemaJsonString?: string // Texto JSON original do schema
     ) => {
-      console.log("[Page] handleSend chamado");
-      console.log("[Page] Label:", label);
-      console.log("[Page] Schema:", schema);
-      console.log("[Page] PDFs:", pdfFiles.map(f => f.name));
-      console.log("[Page] lastSchema atual:", lastSchema);
+      // Trava: evitar múltiplas chamadas simultâneas
+      if (isProcessing) {
+        console.warn("[Page] handleSend já está processando, ignorando chamada duplicada");
+        return;
+      }
       
-      // Declarar pageId fora do try para usar no catch
-      // Usar a sessão atual se existir, senão criar uma nova apenas uma vez
-      let pageId: string | null = currentPageId;
+      setIsProcessing(true);
+      
+      // IMPORTANTE: Declarar finalPageId no escopo externo para ser acessível no catch
+      let finalPageId: string | null = null;
       
       try {
-        // Buscar ou criar página (apenas uma vez, no início)
-        let page: Page | undefined;
+        console.log("[Page] handleSend chamado");
+        console.log("[Page] Label:", label);
+        console.log("[Page] Schema:", schema);
+        console.log("[Page] PDFs:", pdfFiles.map(f => f.name));
+        console.log("[Page] lastSchema atual:", lastSchema);
         
-        // Se não há sessão atual, criar uma nova
+        // IMPORTANTE: Capturar currentPageId UMA VEZ no início e não mudar
+        // Se não há sessão, criar uma nova e usar para TODOS os PDFs
+        let pageId: string | null = currentPageId;
+        
+        // Se não há sessão atual, verificar se uma foi criada recentemente
+        // (evita criar múltiplas sessões quando múltiplos PDFs são enviados simultaneamente)
         if (!pageId) {
+          // Verificar se outra chamada já criou uma página enquanto esperávamos
+          const currentPages = storage.loadPages();
+          const now = Date.now();
+          const recentPages = currentPages
+            .filter(p => p.createdAt > now - 3000) // Últimos 3 segundos
+            .sort((a, b) => b.createdAt - a.createdAt); // Mais recente primeiro
+          
+          if (recentPages.length > 0) {
+            // Usar página recente ao invés de criar nova
+            pageId = recentPages[0].id;
+            setCurrentPageId(pageId);
+            console.log(`[Page] Reutilizando sessão recente: ${pageId}`);
+          } else {
+            // Criar nova página
+            const newPage: Page = {
+              id: `page_${Date.now()}`,
+              title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
+                day: "2-digit", 
+                month: "2-digit", 
+                hour: "2-digit", 
+                minute: "2-digit" 
+              })}`,
+              createdAt: Date.now(),
+              messages: [],
+            };
+            addPage(newPage);
+            pageId = newPage.id;
+            setCurrentPageId(pageId);
+            setLastSchema(null);
+            console.log(`[Page] Nova sessão criada: ${pageId}`);
+          }
+        } else {
+          console.log(`[Page] Usando sessão existente: ${pageId}`);
+        }
+        
+        // Garantir que pageId não seja null daqui em diante
+        if (!pageId) {
+          console.error("[Page] ERRO: pageId é null após tentar criar/obter sessão");
+          setIsProcessing(false);
+          return;
+        }
+        
+        // IMPORTANTE: Usar uma constante finalPageId que NÃO muda durante todo o processamento
+        // Isso garante que todos os PDFs vão para a mesma sessão
+        finalPageId = pageId;
+        
+        // Buscar página existente (primeiro do estado, depois do storage)
+        let page: Page | undefined = pages.find((p) => p.id === finalPageId);
+        if (!page && typeof window !== "undefined") {
+          const storagePages = storage.loadPages();
+          page = storagePages.find((p) => p.id === finalPageId);
+        }
+        
+        // Se a página não foi encontrada, criar uma nova com o mesmo ID
+        if (!page) {
+          console.warn(`[Page] Página ${finalPageId} não encontrada, criando nova com mesmo ID...`);
           const newPage: Page = {
-            id: `page_${Date.now()}`,
+            id: finalPageId,
             title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
               day: "2-digit", 
               month: "2-digit", 
@@ -110,47 +182,28 @@ export default function Home() {
             createdAt: Date.now(),
             messages: [],
           };
-          // Adicionar página e selecionar
           addPage(newPage);
-          pageId = newPage.id;
           page = newPage;
-          setCurrentPageId(pageId);
-          // Resetar lastSchema ao criar nova sessão
-          setLastSchema(null);
-          console.log(`[Page] Nova sessão criada: ${pageId}`);
-        } else {
-          // Buscar página existente (primeiro do estado, depois do storage)
-          page = pages.find((p) => p.id === pageId);
-          if (!page && typeof window !== "undefined") {
-            const storagePages = storage.loadPages();
-            page = storagePages.find((p) => p.id === pageId);
-          }
-          console.log(`[Page] Usando sessão existente: ${pageId}`);
-        }
-        
-        if (!page) {
-          console.error("Sessão não encontrada");
-          alert("Erro: sessão não encontrada. Tente novamente.");
-          return;
         }
         
         // Garantir que a página está selecionada
-        if (currentPageId !== pageId) {
-          setCurrentPageId(pageId);
+        if (currentPageId !== finalPageId) {
+          setCurrentPageId(finalPageId);
         }
-        
-        // Atualizar pageId para usar na próxima iteração (se houver múltiplos PDFs)
-        // Isso garante que todos os PDFs vão para a mesma sessão
 
         // Verificar se o schema mudou comparando com o último schema enviado no chat
         // SEMPRE verificar nas mensagens do chat (fonte de verdade) para evitar duplicações
         const currentPagesForSchema = storage.loadPages();
-        const currentPageForSchema = currentPagesForSchema.find((p) => p.id === pageId) || page;
+        const currentPageForSchema = currentPagesForSchema.find((p) => p.id === finalPageId) || page;
         const schemaMessages = currentPageForSchema.messages
           .filter((msg): msg is MessageUser => msg.role === "user" && msg.payload.isSchemaOnly === true)
           .sort((a, b) => b.createdAt - a.createdAt); // Ordenar do mais recente para o mais antigo
         
         const lastSchemaMessage = schemaMessages[0]; // Pegar o mais recente
+        
+        // Comparar com o último schema enviado no chat
+        // Esta variável será usada para decidir se mostra mensagem de schema no chat
+        let schemaChanged = false;
         
         // Verificar se há uma mensagem de schema muito recente (últimos 2 segundos) - pode ser duplicação
         const now = Date.now();
@@ -173,9 +226,6 @@ export default function Home() {
         
         const newSchemaText = schemaJsonString || JSON.stringify(schema, null, 2);
         const normalizedNewSchema = normalizeJson(newSchemaText);
-        
-        // Comparar com o último schema enviado no chat
-        let schemaChanged = false;
         
         // Se não há mensagem muito recente, fazer a comparação normal
         if (!veryRecentSchemaMessage) {
@@ -220,9 +270,9 @@ export default function Home() {
           
           // Buscar página atualizada antes de adicionar mensagem
           const updatedPagesForSchema = storage.loadPages();
-          const updatedPageForSchema = updatedPagesForSchema.find((p) => p.id === pageId) || currentPageForSchema;
+          const updatedPageForSchema = updatedPagesForSchema.find((p) => p.id === finalPageId) || currentPageForSchema;
           
-          updatePage(pageId, {
+          updatePage(finalPageId, {
             messages: [...updatedPageForSchema.messages, schemaMessage],
           });
           setUpdateTrigger((prev) => prev + 1);
@@ -237,6 +287,7 @@ export default function Home() {
         }
 
         // Processar PDFs sequencialmente (ping-pong: um PDF → resposta → próximo PDF → resposta)
+        // Manter no mesmo chat (mesmo pageId) e processar um por vez
         for (let i = 0; i < pdfFiles.length; i++) {
           const pdfFile = pdfFiles[i];
           const isLast = i === pdfFiles.length - 1;
@@ -270,46 +321,63 @@ export default function Home() {
           };
 
           // Buscar página atualizada antes de adicionar mensagens
-          // Sempre usar a mesma pageId para garantir que todos os PDFs vão para a mesma sessão
+          // SEMPRE usar finalPageId (constante) para garantir que todos os PDFs vão para a mesma sessão
           const currentPages = storage.loadPages();
-          const currentPage = currentPages.find((p) => p.id === pageId) || page;
+          let currentPage = currentPages.find((p) => p.id === finalPageId);
           
-          // Garantir que estamos usando a mesma sessão
-          if (currentPage.id !== pageId) {
-            console.warn(`[Page] Sessão mudou durante processamento. Esperado: ${pageId}, encontrado: ${currentPage.id}`);
+          // Se não encontrou a página, usar a página inicial
+          if (!currentPage) {
+            console.warn(`[Page] Página ${finalPageId} não encontrada no storage, usando página inicial`);
+            currentPage = page;
+          }
+          
+          // Garantir que estamos usando a mesma sessão (não permitir mudança)
+          if (currentPage && currentPage.id !== finalPageId) {
+            console.error(`[Page] ERRO: Sessão mudou durante processamento. Esperado: ${finalPageId}, encontrado: ${currentPage.id}`);
+            // Forçar uso do finalPageId correto
+            currentPage = { ...currentPage, id: finalPageId };
+          }
+          
+          // Garantir que a página está selecionada
+          if (currentPageId !== finalPageId) {
+            setCurrentPageId(finalPageId);
           }
           
           // Adicionar mensagem do usuário e mensagem de processamento
           const updatedMessages = [...currentPage.messages, userMessage, processingMessage];
           
           console.log(`[Page] Adicionando mensagens para PDF ${i + 1}/${pdfFiles.length}:`, {
-            pageId,
+            finalPageId,
             pdfName: pdfFile.name,
             userMessage,
             processingMessage,
             totalMessages: updatedMessages.length
           });
           
-          updatePage(pageId, {
+          updatePage(finalPageId, {
             messages: updatedMessages,
           });
           
           // Garantir que a página está selecionada
-          setCurrentPageId(pageId);
+          setCurrentPageId(finalPageId);
           
           // Forçar atualização imediata
           setUpdateTrigger((prev) => prev + 1);
 
           // Executar extração para este PDF específico
+          // Nota: O schema sempre é enviado na API (necessário para processar),
+          // mas a mensagem de schema no chat só aparece quando mudou (otimização de UI)
           console.log(`[Page] Processando PDF ${i + 1}/${pdfFiles.length}: ${pdfFile.name}`);
           console.log("[Page]   - label:", label);
           console.log("[Page]   - schema:", schema);
           console.log("[Page]   - devMode:", devMode);
+          console.log("[Page]   - schemaChanged:", schemaChanged);
           
           let runs: RunResult[] = [];
           try {
             console.log(`[Page] Chamando extract() para ${pdfFile.name}...`);
-            runs = await extract(label, schema, [pdfFile], devMode);
+            // Processar este PDF (ping-pong: um PDF → resposta → próximo PDF)
+            runs = await extract(label, schema, [pdfFile], devMode, useLearning);
             console.log(`[Page] extract() retornou para ${pdfFile.name}:`, runs);
           } catch (extractError) {
             console.error(`[Page] ERRO em extract() para ${pdfFile.name}:`, extractError);
@@ -318,11 +386,11 @@ export default function Home() {
 
           // Buscar página atualizada do estado
           const updatedPages = storage.loadPages();
-          const finalPage = updatedPages.find((p) => p.id === pageId);
+          const finalPage = updatedPages.find((p) => p.id === finalPageId);
           
           if (!finalPage) {
-            console.error("Sessão não encontrada após extração");
-            return;
+            console.error(`[Page] Sessão ${finalPageId} não encontrada após extração`);
+            continue; // Continuar para próximo PDF ao invés de retornar
           }
 
           // Remover mensagem de processamento e adicionar resultados
@@ -339,7 +407,7 @@ export default function Home() {
           }));
 
           // Atualizar página com mensagens do sistema (sem a de processamento)
-          updatePage(pageId, {
+          updatePage(finalPageId, {
             messages: [...messagesWithoutProcessing, ...systemMessages],
           });
           
@@ -358,7 +426,7 @@ export default function Home() {
             const maxAttempts = 20; // 2 segundos máximo
             while (attempts < maxAttempts) {
               const checkPages = storage.loadPages();
-              const checkPage = checkPages.find((p) => p.id === pageId);
+              const checkPage = checkPages.find((p) => p.id === finalPageId);
               if (checkPage) {
                 const hasProcessingMessage = checkPage.messages.some(
                   (msg) => msg.id === processingMessageId
@@ -367,7 +435,7 @@ export default function Home() {
                   (msg) => msg.role === "system" && 
                            msg.run && 
                            msg.run.status !== "processing" &&
-                           (msg.run.status === "completed" || msg.run.status === "error")
+                           (msg.run.status === "ok" || msg.run.status === "error")
                 );
                 
                 // Se não tem mais mensagem de processamento E tem mensagem de resultado, pode continuar
@@ -384,9 +452,16 @@ export default function Home() {
       } catch (err: any) {
         console.error("Erro ao extrair:", err);
         
-        // Adicionar mensagem de erro
+        // Adicionar mensagem de erro (usar finalPageId se disponível, senão currentPageId)
+        const errorPageId = finalPageId || currentPageId;
+        if (!errorPageId) {
+          console.error("[Page] Não é possível adicionar erro: nenhum pageId disponível");
+          setIsProcessing(false);
+          return;
+        }
+        
         const errorPages = storage.loadPages();
-        const errorPage = errorPages.find((p) => p.id === pageId);
+        const errorPage = errorPages.find((p) => p.id === errorPageId);
         
         if (errorPage) {
           // Remover mensagens de processamento
@@ -408,19 +483,21 @@ export default function Home() {
             },
           };
           
-          updatePage(pageId, {
+          updatePage(errorPageId, {
             messages: [...messagesWithoutProcessing, errorMessage],
           });
-          
           // Forçar atualização
           setUpdateTrigger((prev) => prev + 1);
         } else {
           // Se não encontrou página, mostrar erro genérico
           alert(`Erro: ${err.response?.data?.detail || err.message || "Erro desconhecido"}`);
         }
+      } finally {
+        // Sempre liberar a trava no final
+        setIsProcessing(false);
       }
     },
-    [currentPageId, pages, addPage, updatePage, extract, devMode]
+    [currentPageId, pages, addPage, updatePage, extract, devMode, useLearning, isProcessing]
   );
 
   const handleSelectPage = useCallback((pageId: string) => {
@@ -503,7 +580,10 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-[#e5e5e5]">PDF Extractor</span>
             </div>
-            <DevModeToggle value={devMode} onChange={setDevMode} />
+            <div className="flex items-center gap-4">
+              <LearningToggle value={useLearning} onChange={setUseLearning} />
+              <DevModeToggle value={devMode} onChange={setDevMode} />
+            </div>
           </div>
         )}
 

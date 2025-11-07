@@ -9,6 +9,21 @@ from src.graph_builder.models import Graph, Token
 from src.graph_extractor.models import MatchResult
 from src.graph_extractor.tiebreaker.base import BaseTieBreaker
 
+# Importar debug helper se disponível
+try:
+    import sys
+    from pathlib import Path
+    backend_src = Path(__file__).parent.parent.parent.parent / "backend" / "src"
+    if str(backend_src) not in sys.path:
+        sys.path.insert(0, str(backend_src))
+    from utils.debug import debug_print, get_debug_mode
+except ImportError:
+    # Fallback se não conseguir importar
+    def debug_print(*args, **kwargs):
+        pass
+    def get_debug_mode():
+        return False
+
 
 class LLMTieBreaker(BaseTieBreaker):
     """Tiebreaker que usa LLM (GPT) para desempatar entre candidatos.
@@ -391,19 +406,19 @@ Resposta:"""
             
             # Verificar se há conteúdo na resposta
             if not response.choices or not response.choices[0].message.content:
-                if self.debug:
-                    print(f"    [GPT Name] Resposta vazia do modelo")
+                if self.debug or get_debug_mode():
+                    debug_print(f"    [GPT Name] Resposta vazia do modelo")
                 return None
             
             content = response.choices[0].message.content.strip().upper()
             
-            if self.debug:
-                print(f"    [GPT Name] Resposta: '{content}'")
+            if self.debug or get_debug_mode():
+                debug_print(f"    [GPT Name] Resposta: '{content}'")
             
             # Se resposta está vazia após strip, retornar None
             if not content:
-                if self.debug:
-                    print(f"    [GPT Name] Resposta vazia após strip")
+                if self.debug or get_debug_mode():
+                    debug_print(f"    [GPT Name] Resposta vazia após strip")
                 return None
             
             # Verificar se é "NENHUM"
@@ -416,20 +431,20 @@ Resposta:"""
                 candidate_num = int(numbers[0])
                 candidate_index = candidate_num - 1
                 if 0 <= candidate_index < len(candidates):
-                    if self.debug:
-                        print(f"    [GPT Name] Escolheu candidato {candidate_index + 1}: '{candidates[candidate_index][:50]}'")
+                    if self.debug or get_debug_mode():
+                        debug_print(f"    [GPT Name] Escolheu candidato {candidate_index + 1}: '{candidates[candidate_index][:50]}'")
                     return candidate_index
             
             # Se não encontrou número, tentar fallback: verificar se há texto que indique um número
             # Ex: "1", "candidato 1", "primeiro", etc.
-            if self.debug:
-                print(f"    [GPT Name] Não encontrou número válido na resposta: '{content}'")
+            if self.debug or get_debug_mode():
+                debug_print(f"    [GPT Name] Não encontrou número válido na resposta: '{content}'")
             
             return None
             
         except Exception as e:
-            if self.debug:
-                print(f"    [GPT Name] Erro: {e}")
+            if self.debug or get_debug_mode():
+                debug_print(f"    [GPT Name] Erro: {e}")
             return None
     
     def _quick_name_check(self, text: str) -> bool:

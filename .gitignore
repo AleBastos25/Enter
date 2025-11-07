@@ -40,6 +40,10 @@ htmlcov/
 # VSCode / IDEs
 .vscode/
 .idea/
+.cursor/
+
+# Cache directories
+.cache/
 
 # Mac / Windows
 .DS_Store

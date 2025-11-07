@@ -69,20 +69,39 @@ export function Sidebar({
     setEditingTitle("");
   };
 
-  // Agrupar sessões por label
+  // Agrupar sessões por label (uma sessão pode aparecer em múltiplas labels)
   const pagesByLabel = useMemo(() => {
     const grouped: Record<string, Page[]> = {};
     pages.forEach((page) => {
-      const userMessage = page.messages.find((m) => m.role === "user");
-      if (userMessage && userMessage.role === "user") {
-        const label = userMessage.payload.label;
+      // Pegar todas as labels únicas da sessão (de todas as mensagens de usuário)
+      const labels = new Set<string>();
+      page.messages.forEach((msg) => {
+        if (msg.role === "user" && msg.payload.label && !msg.payload.isSchemaOnly) {
+          labels.add(msg.payload.label);
+        }
+      });
+      
+      // Adicionar a sessão em cada label que ela contém
+      labels.forEach((label) => {
         if (!grouped[label]) {
           grouped[label] = [];
         }
-        grouped[label].push(page);
-      }
+        // Evitar duplicatas (caso a mesma sessão tenha a mesma label múltiplas vezes)
+        if (!grouped[label].find((p) => p.id === page.id)) {
+          grouped[label].push(page);
+        }
+      });
     });
-    return grouped;
+    
+    // Ordenar labels alfabeticamente e sessões por data (mais recente primeiro)
+    const sorted: Record<string, Page[]> = {};
+    Object.keys(grouped)
+      .sort()
+      .forEach((label) => {
+        sorted[label] = grouped[label].sort((a, b) => b.createdAt - a.createdAt);
+      });
+    
+    return sorted;
   }, [pages]);
 
   return (
@@ -207,29 +226,33 @@ export function Sidebar({
           </div>
         ) : (
           <div className="space-y-2">
-            {Object.entries(pagesByLabel).map(([label, labelPages]) => (
-              <div key={label}>
-                <div className="text-xs font-medium text-[#9ca3af] px-2 py-1 uppercase">
-                  {label} ({labelPages.length})
+            {Object.keys(pagesByLabel).length === 0 ? (
+              <p className="text-xs text-[#9ca3af] p-2 text-center">Nenhuma label encontrada</p>
+            ) : (
+              Object.entries(pagesByLabel).map(([label, labelPages]) => (
+                <div key={label}>
+                  <div className="text-xs font-medium text-[#FF6B00] px-2 py-1.5 uppercase tracking-wide">
+                    {label} <span className="text-[#9ca3af] font-normal">({labelPages.length})</span>
+                  </div>
+                  <div className="ml-2 space-y-1 mt-1">
+                    {labelPages.map((page) => (
+                      <div
+                        key={page.id}
+                        className={`px-2 py-1.5 rounded cursor-pointer text-sm transition-colors ${
+                          currentPageId === page.id 
+                            ? "bg-[#2a2a2a] text-white border-l-2 border-[#FF6B00]" 
+                            : "text-[#9ca3af] hover:text-white hover:bg-[#1f1f1f]"
+                        }`}
+                        onClick={() => onSelectPage(page.id)}
+                        title={page.title}
+                      >
+                        {page.title}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="ml-2 space-y-1 mt-1">
-                  {labelPages.map((page) => (
-                    <div
-                      key={page.id}
-                      className={`px-2 py-1.5 rounded cursor-pointer text-sm transition-colors ${
-                        currentPageId === page.id 
-                          ? "bg-[#2a2a2a] text-white" 
-                          : "text-[#9ca3af] hover:text-white hover:bg-[#1f1f1f]"
-                      }`}
-                      onClick={() => onSelectPage(page.id)}
-                      title={page.title}
-                    >
-                      {page.title}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>

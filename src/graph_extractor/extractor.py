@@ -4,69 +4,82 @@ import sys
 import time
 from typing import Dict, Any, Optional, List, Callable
 
-# Log de importação do módulo
-print("[EXTRACTOR_MODULE] Módulo extractor.py sendo importado...", flush=True)
-sys.stdout.flush()
+# Importar debug helper se disponível
+try:
+    # Tentar importar do backend
+    import sys
+    from pathlib import Path
+    backend_src = Path(__file__).parent.parent.parent.parent / "backend" / "src"
+    if str(backend_src) not in sys.path:
+        sys.path.insert(0, str(backend_src))
+    from utils.debug import debug_print, error_print, get_debug_mode, set_debug_mode
+except ImportError:
+    # Fallback se não conseguir importar
+    def debug_print(*args, **kwargs):
+        pass
+    def error_print(*args, **kwargs):
+        print(*args, file=sys.stderr, **kwargs)
+    def get_debug_mode():
+        return False
+    def set_debug_mode(enabled: bool):
+        pass
+
+# Log de importação do módulo (apenas em debug)
+debug_print("[EXTRACTOR_MODULE] Módulo extractor.py sendo importado...")
 
 try:
     from src.graph_builder import TokenExtractor, GraphBuilder, RoleClassifier
-    print("[EXTRACTOR_MODULE] graph_builder importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] graph_builder importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_builder: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_builder: {e}")
     raise
 
 try:
     from src.graph_builder.models import Graph, Token
-    print("[EXTRACTOR_MODULE] graph_builder.models importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] graph_builder.models importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_builder.models: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_builder.models: {e}")
     raise
 
 try:
     from src.graph_extractor.models import (
         ExtractionResult, ExtractionMetadata, FieldMatch, MatchResult, MatchType
     )
-    print("[EXTRACTOR_MODULE] graph_extractor.models importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] graph_extractor.models importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_extractor.models: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar graph_extractor.models: {e}")
     raise
 
 try:
     from src.graph_extractor.node_manager import NodeUsageManager
-    print("[EXTRACTOR_MODULE] node_manager importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] node_manager importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar node_manager: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar node_manager: {e}")
     raise
 
 try:
     from src.graph_extractor.matchers import PatternMatcher, RegexMatcher, EmbeddingMatcher
-    print("[EXTRACTOR_MODULE] matchers importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] matchers importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar matchers: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar matchers: {e}")
     raise
 
 try:
     from src.graph_extractor.tiebreaker import HeuristicTieBreaker, LLMTieBreaker
-    print("[EXTRACTOR_MODULE] tiebreaker importado", flush=True)
-    sys.stdout.flush()
+    debug_print("[EXTRACTOR_MODULE] tiebreaker importado")
 except Exception as e:
-    print(f"[EXTRACTOR_MODULE] ERRO ao importar tiebreaker: {e}", flush=True)
-    sys.stdout.flush()
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar tiebreaker: {e}")
     raise
 
-print("[EXTRACTOR_MODULE] Todas as dependências importadas com sucesso", flush=True)
-print("[EXTRACTOR_MODULE] Definindo classe GraphSchemaExtractor...", flush=True)
-sys.stdout.flush()
+try:
+    from src.graph_extractor.learner import DocumentLearner
+    debug_print("[EXTRACTOR_MODULE] learner importado")
+except Exception as e:
+    error_print(f"[EXTRACTOR_MODULE] ERRO ao importar learner: {e}")
+    raise
+
+debug_print("[EXTRACTOR_MODULE] Todas as dependências importadas com sucesso")
+debug_print("[EXTRACTOR_MODULE] Definindo classe GraphSchemaExtractor...")
 
 
 class GraphSchemaExtractor:
@@ -87,7 +100,8 @@ class GraphSchemaExtractor:
         tiebreak_threshold: float = 0.05,
         llm_model: str = "gpt-5-mini",
         use_llm_tiebreaker: bool = True,
-        debug: bool = False
+        debug: bool = False,
+        use_learning: bool = True
     ):
         """Inicializa o extrator.
         
@@ -98,6 +112,7 @@ class GraphSchemaExtractor:
             llm_model: Modelo LLM para tiebreaker (se use_llm_tiebreaker=True)
             use_llm_tiebreaker: Se True, usa LLM quando heurísticas não resolvem
             debug: Se True, imprime informações de debug durante a extração
+            use_learning: Se True, usa aprendizado incremental de documentos anteriores
         """
         # Componentes de construção de grafo
         self.token_extractor = TokenExtractor()
@@ -121,13 +136,32 @@ class GraphSchemaExtractor:
         # Configurações
         self.tiebreak_threshold = tiebreak_threshold
         self.debug = debug
+        self.use_learning = use_learning
         
-        # Log de inicialização
-        print(f"[GraphSchemaExtractor.__init__] Extrator inicializado com sucesso", flush=True)
-        print(f"[GraphSchemaExtractor.__init__]   - embedding_model: {embedding_model}", flush=True)
-        print(f"[GraphSchemaExtractor.__init__]   - llm_model: {llm_model}", flush=True)
-        print(f"[GraphSchemaExtractor.__init__]   - debug: {debug}", flush=True)
-        sys.stdout.flush()
+        # Configurar modo debug global baseado no parâmetro
+        set_debug_mode(debug)
+        
+        # Helper para prints condicionais (usa debug global ou self.debug como fallback)
+        def _debug_print(*args, **kwargs):
+            if get_debug_mode() or self.debug:
+                debug_print(*args, **kwargs)
+        self._debug_print = _debug_print
+        
+        # Sistema de aprendizado incremental (singleton compartilhado)
+        # Usa arquivo persistente para compartilhar entre UI e CLI
+        if use_learning:
+            self.learner = DocumentLearner.get_instance()
+        else:
+            # Usar NoOpLearner quando aprendizado está desabilitado
+            from src.graph_extractor.learner import NoOpLearner
+            self.learner = NoOpLearner()
+        
+        # Log de inicialização (apenas em debug)
+        debug_print(f"[GraphSchemaExtractor.__init__] Extrator inicializado com sucesso")
+        debug_print(f"[GraphSchemaExtractor.__init__]   - embedding_model: {embedding_model}")
+        debug_print(f"[GraphSchemaExtractor.__init__]   - llm_model: {llm_model}")
+        debug_print(f"[GraphSchemaExtractor.__init__]   - debug: {debug}")
+        debug_print(f"[GraphSchemaExtractor.__init__]   - use_learning: {use_learning}")
     
     def extract(
         self,
@@ -157,23 +191,19 @@ class GraphSchemaExtractor:
         """
         start_time = time.time()
         
-        # Log inicial
-        import sys
-        print(f"[EXTRACT] Iniciando extração", flush=True)
-        print(f"[EXTRACT]   - label: {label}", flush=True)
-        print(f"[EXTRACT]   - pdf_path: {pdf_path}", flush=True)
-        print(f"[EXTRACT]   - campos: {list(extraction_schema.keys())}", flush=True)
-        sys.stdout.flush()
+        # Log inicial (apenas em debug)
+        debug_print(f"[EXTRACT] Iniciando extração")
+        debug_print(f"[EXTRACT]   - label: {label}")
+        debug_print(f"[EXTRACT]   - pdf_path: {pdf_path}")
+        debug_print(f"[EXTRACT]   - campos: {list(extraction_schema.keys())}")
         
         try:
             # 1. Construir grafo
             if on_progress:
                 on_progress("building_graph")
-            print(f"[EXTRACT] Construindo grafo...", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[EXTRACT] Construindo grafo...")
             graph = self._build_graph(pdf_path, label)
-            print(f"[EXTRACT] Grafo construído: {len(graph.nodes) if graph else 0} nós", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[EXTRACT] Grafo construído: {len(graph.nodes) if graph else 0} nós")
             
             if not graph or not graph.nodes:
                 return self._create_empty_result(label, extraction_schema, start_time, "PDF vazio ou sem texto")
@@ -184,8 +214,7 @@ class GraphSchemaExtractor:
             # 3. FASE 1: Processar TODOS os regex de uma vez (mais rápido)
             if on_progress:
                 on_progress("regex_matching")
-            print(f"[EXTRACT] Iniciando fase de regex matching...", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[EXTRACT] Iniciando fase de regex matching...")
             # Dicionário para armazenar resultados: {field_name: FieldMatch}
             field_matches_dict = {}
             remaining_fields = {}  # Campos que não tiveram match de regex
@@ -209,6 +238,11 @@ class GraphSchemaExtractor:
                     )
                     field_matches_dict[field_name] = field_match
                     
+                    # Aprender do resultado da extração (mesmo que seja None)
+                    self._learn_from_field_match(
+                        label, field_name, field_description, field_match, graph
+                    )
+                    
                     # Se regex não encontrou match válido, adicionar à lista de campos restantes
                     if field_match.strategy_used == "none" and field_match.value is None:
                         remaining_fields[field_name] = field_description
@@ -216,17 +250,21 @@ class GraphSchemaExtractor:
             # 4. FASE 2: Para campos restantes, usar pattern + embedding/LLM
             if on_progress:
                 on_progress("embedding_matching")
-            print(f"[EXTRACT] Iniciando fase de embedding matching ({len(remaining_fields)} campos restantes)...", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[EXTRACT] Iniciando fase de embedding matching ({len(remaining_fields)} campos restantes)...")
             needs_tiebreak = False
             for field_name, field_description in remaining_fields.items():
                 field_match = self._extract_field_with_pattern_embedding(
-                    field_name, field_description, graph, node_manager
+                    field_name, field_description, graph, node_manager, label
                 )
                 field_matches_dict[field_name] = field_match
                 # Verificar se houve tiebreak
                 if "tiebreak" in field_match.strategy_used:
                     needs_tiebreak = True
+                
+                # Aprender do resultado da extração
+                self._learn_from_field_match(
+                    label, field_name, field_description, field_match, graph
+                )
             
             if needs_tiebreak and on_progress:
                 on_progress("tiebreaking")
@@ -263,20 +301,19 @@ class GraphSchemaExtractor:
             
             result_dict = result.to_dict()
             elapsed_time = time.time() - start_time
-            print(f"[EXTRACT] Extração concluída com sucesso em {elapsed_time:.2f}s", flush=True)
-            print(f"[EXTRACT] Campos extraídos: {extracted_count}/{len(extraction_schema)}", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[EXTRACT] Extração concluída com sucesso em {elapsed_time:.2f}s")
+            debug_print(f"[EXTRACT] Campos extraídos: {extracted_count}/{len(extraction_schema)}")
             
             return result_dict
             
         except Exception as e:
             import traceback
             elapsed_time = time.time() - start_time
-            print(f"[EXTRACT] ERRO durante extração (após {elapsed_time:.2f}s):", flush=True)
-            print(f"[EXTRACT] Tipo: {type(e).__name__}", flush=True)
-            print(f"[EXTRACT] Mensagem: {str(e)}", flush=True)
-            traceback.print_exc()
-            sys.stdout.flush()
+            error_print(f"[EXTRACT] ERRO durante extração (após {elapsed_time:.2f}s):")
+            error_print(f"[EXTRACT] Tipo: {type(e).__name__}")
+            error_print(f"[EXTRACT] Mensagem: {str(e)}")
+            if get_debug_mode() or self.debug:
+                traceback.print_exc()
             return self._create_empty_result(
                 label, extraction_schema, start_time, f"Erro: {str(e)}"
             )
@@ -344,19 +381,19 @@ class GraphSchemaExtractor:
             FieldMatch com resultado da extração (ou None se não encontrou)
         """
         # Debug: mostrar hints encontradas para este campo
-        if self.debug:
+        if self.debug or get_debug_mode():
             from src.graph_extractor.hints.base import hint_registry
             relevant_hints = hint_registry.find_relevant(field_name, field_description)
             hint_names = [h.name for h in relevant_hints]
             has_specific_hints = self._has_specific_hints(field_name, field_description)
             expected_type = self._get_expected_type_name(field_name, field_description)
-            print(f"\n[Regex Phase] Campo: '{field_name}'")
-            print(f"  Hints encontradas: {hint_names}")
-            print(f"  Tem hints específicas: {has_specific_hints}")
-            print(f"  Tipo esperado: {expected_type}")
+            debug_print(f"\n[Regex Phase] Campo: '{field_name}'")
+            debug_print(f"  Hints encontradas: {hint_names}")
+            debug_print(f"  Tem hints específicas: {has_specific_hints}")
+            debug_print(f"  Tipo esperado: {expected_type}")
             if expected_type:
                 llm_required = expected_type in ["endereço", "telefone"]
-                print(f"  Requer validação LLM: {llm_required}")
+                debug_print(f"  Requer validação LLM: {llm_required}")
         
         # Obter nós disponíveis
         available_nodes = self._get_available_nodes(graph, node_manager)
@@ -428,7 +465,8 @@ class GraphSchemaExtractor:
         field_name: str,
         field_description: str,
         graph: Graph,
-        node_manager: NodeUsageManager
+        node_manager: NodeUsageManager,
+        label_type: Optional[str] = None
     ) -> FieldMatch:
         """Extrai um campo usando cascata de matching.
         
@@ -484,8 +522,8 @@ class GraphSchemaExtractor:
                 )
             
             # Usar heurística para identificar qual candidato é um nome
-            if self.debug:
-                print(f"  [Nome] Avaliando {len(candidate_texts)} candidatos com heurística: {[t[:30] for t in candidate_texts]}")
+            if self.debug or get_debug_mode():
+                debug_print(f"  [Nome] Avaliando {len(candidate_texts)} candidatos com heurística: {[t[:30] for t in candidate_texts]}")
             
             # Heurística: escolher candidato que parece mais com nome
             # Sistema de pontuação:
@@ -521,8 +559,8 @@ class GraphSchemaExtractor:
                 if all(word[0].isupper() if word else False for word in words):
                     score += 2
                 
-                if self.debug:
-                    print(f"    Candidato {i+1}: '{text[:50]}' -> score: {score}")
+                if self.debug or get_debug_mode():
+                    debug_print(f"    Candidato {i+1}: '{text[:50]}' -> score: {score}")
                 
                 if score > best_score:
                     best_score = score
@@ -532,8 +570,8 @@ class GraphSchemaExtractor:
                 selected_token = name_candidates[best_index]
                 selected_value = candidate_texts[best_index]
                 
-                if self.debug:
-                    print(f"  [Nome] Heurística escolheu candidato {best_index + 1} (score: {best_score}): '{selected_value[:50]}'")
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Nome] Heurística escolheu candidato {best_index + 1} (score: {best_score}): '{selected_value[:50]}'")
                 
                 # Criar MatchResult para o token selecionado
                 match_result = MatchResult(
@@ -547,8 +585,8 @@ class GraphSchemaExtractor:
                 return self._create_field_match(field_name, match_result, "name_heuristic", node_manager)
             else:
                 # Nenhum candidato foi identificado
-                if self.debug:
-                    print(f"  [Nome] Nenhum candidato válido identificado (melhor score: {best_score}, threshold: 10)")
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Nome] Nenhum candidato válido identificado (melhor score: {best_score}, threshold: 10)")
                 
                 return FieldMatch(
                     field_name=field_name,
@@ -573,17 +611,30 @@ class GraphSchemaExtractor:
             # Match perfeito tem prioridade (apenas os que têm valor)
             if perfect_regex:
                 if len(perfect_regex) == 1:
-                    return self._create_field_match(field_name, perfect_regex[0], "regex_perfect", node_manager)
+                    # Validar qualidade do match antes de retornar
+                    if not self._validate_match_quality(perfect_regex[0], field_name, field_description, graph, label_type):
+                        # Match não faz sentido, não retornar
+                        pass  # Continuar para próxima fase
+                    else:
+                        return self._create_field_match(field_name, perfect_regex[0], "regex_perfect", node_manager)
                 else:
                     # Múltiplos matches perfeitos, desempate
                     selected = self._resolve_tie(perfect_regex, field_description, graph, field_name)
-                    return self._create_field_match(field_name, selected, "regex_perfect_tiebreak", node_manager)
+                    # Validar qualidade do match após tiebreak
+                    if not self._validate_match_quality(selected, field_name, field_description, graph, label_type):
+                        # Match não faz sentido, não retornar
+                        pass  # Continuar para próxima fase
+                    else:
+                        return self._create_field_match(field_name, selected, "regex_perfect_tiebreak", node_manager)
             
             # Se não há match perfeito válido, usar parcial (mas precisa de desempate se houver múltiplos)
             if partial_regex:
                 if len(partial_regex) == 1:
-                    # Validar tipo antes de retornar
-                    if self._has_specific_hints(field_name, field_description):
+                    # Validar qualidade e tipo antes de retornar
+                    if not self._validate_match_quality(partial_regex[0], field_name, field_description, graph, label_type):
+                        # Match não faz sentido, não retornar
+                        pass  # Continuar para próxima fase
+                    elif self._has_specific_hints(field_name, field_description):
                         if not self._validate_value_type(partial_regex[0].extracted_value, field_name, field_description):
                             # Tipo não corresponde, não retornar este match
                             pass  # Continuar para próxima fase
@@ -594,8 +645,11 @@ class GraphSchemaExtractor:
                 else:
                     # Múltiplos matches parciais, desempate
                     selected = self._resolve_tie(partial_regex, field_description, graph, field_name)
-                    # Validar tipo após tiebreak
-                    if self._has_specific_hints(field_name, field_description):
+                    # Validar qualidade e tipo após tiebreak
+                    if not self._validate_match_quality(selected, field_name, field_description, graph, label_type):
+                        # Match não faz sentido, não retornar
+                        pass  # Continuar para próxima fase
+                    elif self._has_specific_hints(field_name, field_description):
                         if not self._validate_value_type(selected.extracted_value, field_name, field_description):
                             # Tipo não corresponde, não retornar este match
                             pass  # Continuar para próxima fase
@@ -612,8 +666,11 @@ class GraphSchemaExtractor:
         if pattern_matches:
             perfect_matches = [m for m in pattern_matches if m.score >= 0.9]
             if len(perfect_matches) == 1:
-                # Validar tipo antes de retornar
-                if self._has_specific_hints(field_name, field_description):
+                # Validar qualidade e tipo antes de retornar
+                if not self._validate_match_quality(perfect_matches[0], field_name, field_description, graph, label_type):
+                    # Match não faz sentido, não retornar
+                    pass  # Continuar para próxima fase
+                elif self._has_specific_hints(field_name, field_description):
                     if not self._validate_value_type(perfect_matches[0].extracted_value, field_name, field_description):
                         # Tipo não corresponde, não retornar este match
                         pass  # Continuar para próxima fase
@@ -635,21 +692,26 @@ class GraphSchemaExtractor:
                         best_embedding_token_id = embedding_matches[0].token.id
                         for perfect_match in perfect_matches:
                             if perfect_match.token.id == best_embedding_token_id:
-                                # Validar tipo antes de retornar
-                                if self._has_specific_hints(field_name, field_description):
+                                # Validar qualidade e tipo antes de retornar
+                                if not self._validate_match_quality(perfect_match, field_name, field_description, graph, label_type):
+                                    continue  # Tentar próximo match
+                                elif self._has_specific_hints(field_name, field_description):
                                     if not self._validate_value_type(perfect_match.extracted_value, field_name, field_description):
                                         continue  # Tentar próximo match
                                 return self._create_field_match(
                                     field_name, perfect_match, "pattern_perfect_embedding_tiebreak", node_manager
                                 )
                 except Exception as e:
-                    if self.debug:
-                        print(f"  [Pattern Tiebreak] Erro ao usar embedding: {e}")
+                    if self.debug or get_debug_mode():
+                        debug_print(f"  [Pattern Tiebreak] Erro ao usar embedding: {e}")
                 
                 # Fallback: usar tiebreaker normal
                 selected = self._resolve_tie(perfect_matches, field_description, graph, field_name)
-                # Validar tipo após tiebreak
-                if self._has_specific_hints(field_name, field_description):
+                # Validar qualidade e tipo após tiebreak
+                if not self._validate_match_quality(selected, field_name, field_description, graph, label_type):
+                    # Match não faz sentido, não retornar
+                    pass  # Continuar para próxima fase
+                elif self._has_specific_hints(field_name, field_description):
                     if not self._validate_value_type(selected.extracted_value, field_name, field_description):
                         # Tipo não corresponde, não retornar este match
                         pass  # Continuar para próxima fase
@@ -660,8 +722,12 @@ class GraphSchemaExtractor:
             
             # Verificar matches parciais de pattern
             if pattern_matches[0].score >= 0.7:
+                # Validar se o match faz sentido antes de retornar
+                if not self._validate_match_quality(pattern_matches[0], field_name, field_description, graph, label_type):
+                    # Match não faz sentido, não retornar
+                    pass  # Continuar para próxima fase
                 # Validar tipo antes de retornar
-                if self._has_specific_hints(field_name, field_description):
+                elif self._has_specific_hints(field_name, field_description):
                     if not self._validate_value_type(pattern_matches[0].extracted_value, field_name, field_description):
                         # Tipo não corresponde, não retornar este match
                         pass  # Continuar para próxima fase
@@ -679,8 +745,12 @@ class GraphSchemaExtractor:
             # Verificar se há empate
             if self.heuristic_tiebreaker.should_break_tie(embedding_matches, self.tiebreak_threshold):
                 selected = self._resolve_tie(embedding_matches, field_description, graph, field_name)
+                # Validar qualidade do match antes de retornar
+                if not self._validate_match_quality(selected, field_name, field_description, graph, label_type):
+                    # Match não faz sentido, não retornar
+                    pass  # Continuar para retornar None
                 # Validar tipo após tiebreak
-                if self._has_specific_hints(field_name, field_description):
+                elif self._has_specific_hints(field_name, field_description):
                     if not self._validate_value_type(selected.extracted_value, field_name, field_description):
                         # Tipo não corresponde, não retornar este match
                         pass  # Continuar para retornar None
@@ -689,9 +759,12 @@ class GraphSchemaExtractor:
                 else:
                     return self._create_field_match(field_name, selected, "embedding_tiebreak", node_manager)
             else:
-                # Melhor match único - validar tipo
+                # Melhor match único - validar qualidade e tipo
                 best_match = embedding_matches[0]
-                if self._has_specific_hints(field_name, field_description):
+                if not self._validate_match_quality(best_match, field_name, field_description, graph, label_type):
+                    # Match não faz sentido, não retornar
+                    pass  # Continuar para retornar None
+                elif self._has_specific_hints(field_name, field_description):
                     if not self._validate_value_type(best_match.extracted_value, field_name, field_description):
                         # Tipo não corresponde, não retornar este match
                         pass  # Continuar para retornar None
@@ -947,6 +1020,134 @@ class GraphSchemaExtractor:
         return self._resolve_perfect_regex_match(
             field_name, selected, graph, node_manager, field_description, strategy_suffix="_tiebreak"
         )
+    
+    def _validate_match_quality(
+        self,
+        match_result: MatchResult,
+        field_name: str,
+        field_description: str,
+        graph: Graph,
+        label_type: Optional[str] = None
+    ) -> bool:
+        """Valida se um match faz sentido baseado no contexto do grafo e semântica.
+        
+        Rejeita matches que claramente não fazem sentido, como:
+        - Tokens com poucas conexões no grafo
+        - Valores de interface (botões, links, etc.)
+        - Valores conectados apenas a dados irrelevantes
+        
+        Args:
+            match_result: Resultado do match a validar
+            field_name: Nome do campo
+            field_description: Descrição do campo
+            graph: Grafo completo
+            
+        Returns:
+            True se o match faz sentido, False caso contrário
+        """
+        token = match_result.token
+        value = match_result.extracted_value
+        
+        if not value:
+            return False
+        
+        value_lower = value.strip().lower()
+        
+        # 1. Rejeitar valores claramente de interface/UI
+        ui_keywords = [
+            "esconder filtros", "mostrar filtros", "ocultar filtros",
+            "atualizar", "buscar", "pesquisar", "filtrar",
+            "limpar", "resetar", "voltar", "avançar", "próximo",
+            "anterior", "cancelar", "confirmar", "salvar",
+            "<<", ">>", "<", ">", "..."
+        ]
+        
+        for keyword in ui_keywords:
+            if keyword in value_lower:
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Match Quality] Rejeitado: valor de interface '{value}' para campo '{field_name}'")
+                return False
+        
+        # 2. Verificar conexões do grafo
+        edges_from = graph.get_edges_from(token.id)
+        edges_to = graph.get_edges_to(token.id)
+        total_edges = len(edges_from) + len(edges_to)
+        
+        # Se tem muito poucas conexões (menos de 2), pode ser um token isolado/irrelevante
+        if total_edges < 2:
+            # Verificar se as conexões fazem sentido
+            relevant_connections = 0
+            
+            # Verificar conexões de saída (token -> outros)
+            for edge in edges_from:
+                connected_token = graph.get_node(edge.to_id)
+                if connected_token:
+                    # Verificar se a conexão faz sentido para o campo
+                    connected_text = connected_token.text.strip().lower()
+                    # Rejeitar se conectado apenas a datas para campos não relacionados a data
+                    if connected_token.is_date():
+                        expected_type = self._get_expected_type_name(field_name, field_description)
+                        if expected_type != "data":
+                            if self.debug or get_debug_mode():
+                                debug_print(f"  [Match Quality] Rejeitado: token '{value}' conectado apenas a data para campo '{field_name}' (tipo esperado: {expected_type})")
+                            return False
+                    relevant_connections += 1
+            
+            # Verificar conexões de entrada (outros -> token)
+            for edge in edges_to:
+                connected_token = graph.get_node(edge.from_id)
+                if connected_token:
+                    relevant_connections += 1
+            
+            # Se tem menos de 2 conexões relevantes, rejeitar
+            if relevant_connections < 2:
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Match Quality] Rejeitado: token '{value}' tem poucas conexões ({relevant_connections}) para campo '{field_name}'")
+                return False
+        
+        # 3. Verificar se o valor faz sentido semântico para o campo
+        # Rejeitar apenas valores claramente de interface/UI, não valores genéricos
+        # (valores genéricos podem ser válidos em alguns contextos)
+        ui_values = ["esconder filtros", "atualizar", "buscar", "pesquisar", "esconder", "filtros", "<<"]
+        if any(ui_val in value_lower for ui_val in ui_values):
+            if self.debug or get_debug_mode():
+                debug_print(f"  [Match Quality] Rejeitado: valor '{value}' é valor de interface para campo '{field_name}'")
+            return False
+        
+        # Rejeitar valores que começam com números seguidos de texto (ex: "0 CONSIGNADO")
+        # Isso geralmente indica valores de dropdown/select que não foram preenchidos corretamente
+        import re
+        if re.match(r'^\d+\s+[A-Z]', value.strip()):
+            if self.debug or get_debug_mode():
+                debug_print(f"  [Match Quality] Rejeitado: valor '{value}' parece ser valor de dropdown não preenchido para campo '{field_name}'")
+            return False
+        
+        # 4. Verificar aprendizado incremental (se disponível)
+        if label_type:
+            # Obter posição do token
+            x = token.bbox.x0 if hasattr(token, 'bbox') and token.bbox else None
+            y = token.bbox.y0 if hasattr(token, 'bbox') and token.bbox else None
+            
+            # Obter tipo de dado esperado
+            expected_type = self._get_expected_type_name(field_name, field_description)
+            
+            # Verificar se deve rejeitar baseado no aprendizado
+            should_reject, reason = self.learner.should_reject_match(
+                label_type=label_type,
+                field_name=field_name,
+                x=x,
+                y=y,
+                role=token.role,
+                data_type=expected_type,
+                connections=total_edges
+            )
+            
+            if should_reject:
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Match Quality] Rejeitado por aprendizado: {reason}")
+                return False
+        
+        return True
     
     def _validate_value_type(
         self,
@@ -1504,59 +1705,59 @@ class GraphSchemaExtractor:
         llm_required_types = ["endereço", "telefone"]
         
         if not expected_type or expected_type not in llm_required_types:
-            if self.debug:
-                print(f"  [LLM Validation] Pulando validação LLM - tipo '{expected_type}' não requer LLM (apenas endereço/telefone)")
+            if self.debug or get_debug_mode():
+                debug_print(f"  [LLM Validation] Pulando validação LLM - tipo '{expected_type}' não requer LLM (apenas endereço/telefone)")
             return None  # Não é um tipo que requer validação LLM
         
         if not self.llm_tiebreaker:
-            if self.debug:
-                print(f"  [LLM Validation] LLM não disponível")
+            if self.debug or get_debug_mode():
+                debug_print(f"  [LLM Validation] LLM não disponível")
             return None  # LLM não disponível
         
-        if self.debug:
-            print(f"  [LLM Validation] APLICANDO validação LLM para tipo: {expected_type}")
-            print(f"  [LLM Validation] Campo: '{field_name}' | Descrição: '{field_description}'")
-            print(f"  [LLM Validation] Token: '{token.text}' (role: {token.role})")
+        if self.debug or get_debug_mode():
+            debug_print(f"  [LLM Validation] APLICANDO validação LLM para tipo: {expected_type}")
+            debug_print(f"  [LLM Validation] Campo: '{field_name}' | Descrição: '{field_description}'")
+            debug_print(f"  [LLM Validation] Token: '{token.text}' (role: {token.role})")
         
         # 3. Coletar todos os descendentes (recursivo)
         all_descendants = self._collect_all_descendants(token, graph)
         
-        if self.debug:
-            print(f"  [LLM Validation] Descendentes encontrados: {len(all_descendants)}")
+        if self.debug or get_debug_mode():
+            debug_print(f"  [LLM Validation] Descendentes encontrados: {len(all_descendants)}")
             if all_descendants:
-                print(f"  [LLM Validation] Descendentes: {[d.text for d in all_descendants[:5]]}")
+                debug_print(f"  [LLM Validation] Descendentes: {[d.text for d in all_descendants[:5]]}")
         
         # 4. Construir candidatos (do mais completo ao mais simples)
         candidates = self._build_aggregation_candidates(token, all_descendants)
         
-        if self.debug:
-            print(f"  [LLM Validation] Candidatos gerados: {len(candidates)}")
+        if self.debug or get_debug_mode():
+            debug_print(f"  [LLM Validation] Candidatos gerados: {len(candidates)}")
         
         # 5. Validar cada candidato com LLM (parar no primeiro positivo)
         # Limitar tentativas para evitar muitas chamadas ao LLM
         max_attempts = min(7, len(candidates))  # Máximo 7 tentativas
         
         for i, candidate_text in enumerate(candidates[:max_attempts]):
-            if self.debug:
-                print(f"  [LLM Validation] Tentativa {i+1}/{max_attempts}: Validando '{candidate_text[:50]}...'")
+            if self.debug or get_debug_mode():
+                debug_print(f"  [LLM Validation] Tentativa {i+1}/{max_attempts}: Validando '{candidate_text[:50]}...'")
             
             try:
                 is_valid = self.llm_tiebreaker.validate_type(candidate_text, expected_type)
                 
-                if self.debug:
-                    print(f"  [LLM Validation] Resultado: {'SIM' if is_valid else 'NÃO'}")
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [LLM Validation] Resultado: {'SIM' if is_valid else 'NÃO'}")
                 
                 if is_valid:
                     # Primeiro candidato validado → retornar
                     return candidate_text
             except Exception as e:
-                if self.debug:
-                    print(f"  [LLM Validation] Erro ao validar: {e}")
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [LLM Validation] Erro ao validar: {e}")
                 continue
         
         # 6. Nenhum candidato passou → retornar None
-        if self.debug:
-            print(f"  [LLM Validation] Nenhum candidato foi validado como {expected_type}")
+        if self.debug or get_debug_mode():
+            debug_print(f"  [LLM Validation] Nenhum candidato foi validado como {expected_type}")
         
         return None
     
@@ -1592,11 +1793,11 @@ class GraphSchemaExtractor:
         strategy = f"regex_perfect{strategy_suffix}"
         
         # Debug: campos problemáticos
-        if field_name in ("endereco_profissional", "telefone_profissional") and self.debug:
-            print(f"\n[DEBUG] _resolve_perfect_regex_match para '{field_name}':")
-            print(f"  Token: '{token.text}' (role: {token.role})")
-            print(f"  match.extracted_value: '{match.extracted_value}'")
-            print(f"  _has_specific_hints: {self._has_specific_hints(field_name, field_description)}")
+        if field_name in ("endereco_profissional", "telefone_profissional") and (self.debug or get_debug_mode()):
+            debug_print(f"\n[DEBUG] _resolve_perfect_regex_match para '{field_name}':")
+            debug_print(f"  Token: '{token.text}' (role: {token.role})")
+            debug_print(f"  match.extracted_value: '{match.extracted_value}'")
+            debug_print(f"  _has_specific_hints: {self._has_specific_hints(field_name, field_description)}")
         
         # PRIORIDADE 1: Se o MatchResult já tem extracted_value definido (do regex_matcher)
         # Isso acontece quando o regex_matcher já encontrou o VALUE filho de uma LABEL
@@ -1994,12 +2195,12 @@ class GraphSchemaExtractor:
                     best_embedding_token_id = embedding_matches[0].token.id
                     for candidate in candidates:
                         if candidate.token.id == best_embedding_token_id:
-                            if self.debug:
-                                print(f"  [Tiebreak] Embedding escolheu candidato com label: {candidate.label_token.text if candidate.label_token else 'N/A'}")
+                            if self.debug or get_debug_mode():
+                                debug_print(f"  [Tiebreak] Embedding escolheu candidato com label: {candidate.label_token.text if candidate.label_token else 'N/A'}")
                             return candidate
             except Exception as e:
-                if self.debug:
-                    print(f"  [Tiebreak] Erro ao usar embedding: {e}")
+                if self.debug or get_debug_mode():
+                    debug_print(f"  [Tiebreak] Erro ao usar embedding: {e}")
         
         # 2. Tentar heurísticas
         try:
@@ -2011,14 +2212,14 @@ class GraphSchemaExtractor:
                     selected = self.llm_tiebreaker.break_tie(candidates, graph, field_description)
                 except Exception as e:
                     # Se LLM falhar, usar resultado das heurísticas
-                    if self.debug:
-                        print(f"  [Tiebreak] Erro ao usar LLM: {e}")
+                    if self.debug or get_debug_mode():
+                        debug_print(f"  [Tiebreak] Erro ao usar LLM: {e}")
             
             return selected
             
         except Exception as e:
-            if self.debug:
-                print(f"  [Tiebreak] Erro ao resolver empate: {e}")
+            if self.debug or get_debug_mode():
+                debug_print(f"  [Tiebreak] Erro ao resolver empate: {e}")
             # Fallback: retornar primeiro candidato (maior score)
             return candidates[0]
     
@@ -2079,6 +2280,64 @@ class GraphSchemaExtractor:
                 "node_marked_as_used": high_confidence  # Indicar se nó foi marcado
             }
         )
+    
+    def _learn_from_field_match(
+        self,
+        label_type: str,
+        field_name: str,
+        field_description: str,
+        field_match: FieldMatch,
+        graph: Graph
+    ) -> None:
+        """Aprende de um resultado de extração de campo.
+        
+        Args:
+            label_type: Tipo do documento (label)
+            field_name: Nome do campo
+            field_description: Descrição do campo
+            field_match: Resultado da extração
+            graph: Grafo completo
+        """
+        found = field_match.value is not None
+        
+        # Obter informações do token se houver match
+        x = None
+        y = None
+        role = None
+        data_type = None
+        strategy = field_match.strategy_used
+        connections = None
+        
+        if field_match.match_result:
+            token = field_match.match_result.token
+            if hasattr(token, 'bbox') and token.bbox:
+                x = token.bbox.x0
+                y = token.bbox.y0
+            role = token.role
+            data_type = self._get_expected_type_name(field_name, field_description)
+            
+            # Contar conexões
+            edges_from = graph.get_edges_from(token.id)
+            edges_to = graph.get_edges_to(token.id)
+            connections = len(edges_from) + len(edges_to)
+        
+        # Aprender
+        self.learner.learn_from_extraction(
+            label_type=label_type,
+            field_name=field_name,
+            found=found,
+            x=x,
+            y=y,
+            role=role,
+            data_type=data_type,
+            strategy=strategy,
+            connections=connections
+        )
+        
+        if (self.debug or get_debug_mode()) and found:
+            info = self.learner.get_field_info(label_type, field_name)
+            if info:
+                debug_print(f"  [Learning] Campo '{field_name}': rigidez={info['rigidity']:.2f}, taxa_sucesso={info['found_rate']:.2f}, ocorrências={info['occurrence_count']}")
     
     def _has_high_confidence(self, match_result: MatchResult, strategy: str) -> bool:
         """Verifica se há alta certeza no match.

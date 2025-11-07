@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   PAGES: "graph_extractor_pages",
   FOLDERS: "graph_extractor_folders",
   DEV_MODE: "graph_extractor_dev_mode",
+  USE_LEARNING: "graph_extractor_use_learning",
 } as const;
 
 export const storage = {
@@ -84,6 +85,32 @@ export const storage = {
     } catch (error) {
       console.error("Erro ao carregar dev mode:", error);
       return false;
+    }
+  },
+
+  /**
+   * Salva estado do aprendizado no localStorage (persiste entre sessões).
+   */
+  saveUseLearning(enabled: boolean): void {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.USE_LEARNING, String(enabled));
+    } catch (error) {
+      console.error("Erro ao salvar use learning:", error);
+    }
+  },
+
+  /**
+   * Carrega estado do aprendizado do localStorage.
+   */
+  loadUseLearning(): boolean | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.USE_LEARNING);
+      return data === null ? null : data === "true";
+    } catch (error) {
+      console.error("Erro ao carregar use learning:", error);
+      return null;
     }
   },
 };

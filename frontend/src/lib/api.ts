@@ -22,11 +22,13 @@ class ApiClient {
     label: string,
     schema: Record<string, string> | string,
     pdfFiles: File[],
-    devMode: boolean = false
+    devMode: boolean = false,
+    useLearning: boolean = true
   ): Promise<{ runs: RunResult[] }> {
     const formData = new FormData();
     formData.append("label", label);
     formData.append("dev_mode", String(devMode));
+    formData.append("use_learning", String(useLearning));
 
     // Schema pode ser string JSON ou arquivo
     console.log("[API] Tipo do schema:", typeof schema);

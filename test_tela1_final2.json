@@ -1,0 +1,23 @@
+[
+  {
+    "data_base": "05/09/2025",
+    "data_vencimento": "12/10/2025",
+    "quantidade_parcelas": null,
+    "produto": null,
+    "sistema": null,
+    "tipo_de_operacao": null,
+    "tipo_de_sistema": null
+  },
+  {
+    "pesquisa_por": "CLIENTE",
+    "pesquisa_tipo": "CPF",
+    "sistema": "Todos",
+    "valor_parcela": null,
+    "cidade": "Mozarlândia"
+  },
+  {
+    "data_referencia": "25/03/2030",
+    "selecao_de_parcelas": "Operação Selecionada",
+    "total_de_parcelas": "96"
+  }
+]

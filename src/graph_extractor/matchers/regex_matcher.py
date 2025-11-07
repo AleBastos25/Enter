@@ -8,6 +8,21 @@ from src.graph_extractor.models import MatchResult, MatchType
 from src.graph_extractor.matchers.base import BaseMatcher
 from src.graph_extractor.hints.base import hint_registry
 
+# Importar debug helper se disponível
+try:
+    import sys
+    from pathlib import Path
+    backend_src = Path(__file__).parent.parent.parent.parent / "backend" / "src"
+    if str(backend_src) not in sys.path:
+        sys.path.insert(0, str(backend_src))
+    from utils.debug import debug_print, get_debug_mode
+except ImportError:
+    # Fallback se não conseguir importar
+    def debug_print(*args, **kwargs):
+        pass
+    def get_debug_mode():
+        return False
+
 
 class RegexMatcher(BaseMatcher):
     """Matcher que usa regex para encontrar correspondências exatas.
@@ -373,12 +388,12 @@ class RegexMatcher(BaseMatcher):
         Returns:
             Valor do melhor caminho ou None se nenhum encaixar
         """
-        # Debug para telefone
-        is_phone_debug = field_name == "telefone_profissional"
+        # Debug para telefone (apenas em modo debug)
+        is_phone_debug = field_name == "telefone_profissional" and get_debug_mode()
         
         if is_phone_debug:
-            print(f"\n[DEBUG] _find_best_child_for_header para '{field_name}':")
-            print(f"  HEADER: '{header_token.text}' (role: {header_token.role})")
+            debug_print(f"\n[DEBUG] _find_best_child_for_header para '{field_name}':")
+            debug_print(f"  HEADER: '{header_token.text}' (role: {header_token.role})")
         
         # Coletar filhos diretos do HEADER
         edges = graph.get_edges_from(header_token.id)
@@ -391,7 +406,7 @@ class RegexMatcher(BaseMatcher):
         if not direct_children:
             # HEADER sem filhos → retornar None
             if is_phone_debug:
-                print(f"  [RESULTADO] None (sem filhos)")
+                debug_print(f"  [RESULTADO] None (sem filhos)")
             return None
         
         # Obter hints relevantes para o campo
@@ -401,14 +416,14 @@ class RegexMatcher(BaseMatcher):
         specific_hints = [h for h in relevant_hints if h.name not in ("text", "name")]
         
         if is_phone_debug:
-            print(f"  Hints específicas: {[h.name for h in specific_hints]}")
+            debug_print(f"  Hints específicas: {[h.name for h in specific_hints]}")
         
         # Se não há hints específicas, retornar None (não sabemos qual filho escolher)
         if not specific_hints:
             # Sem hints específicas, não podemos escolher entre filhos
             # Deixar o extractor tratar isso (retornar null)
             if is_phone_debug:
-                print(f"  [RESULTADO] None (sem hints específicas)")
+                debug_print(f"  [RESULTADO] None (sem hints específicas)")
             return None
         
         # Ordenar filhos diretos por posição espacial
@@ -420,43 +435,43 @@ class RegexMatcher(BaseMatcher):
         # Para cada filho direto, coletar caminho completo e testar
         for child_idx, child in enumerate(sorted_children):
             if is_phone_debug:
-                print(f"\n  Processando filho [{child_idx}]: '{child.text}' (role: {child.role})")
+                debug_print(f"\n  Processando filho [{child_idx}]: '{child.text}' (role: {child.role})")
             
             # Coletar caminho completo a partir deste filho
             path = self._collect_path_from_token(child, graph, visited=set())
             
             if not path:
                 if is_phone_debug:
-                    print(f"    Sem caminho (sem descendentes)")
+                    debug_print(f"    Sem caminho (sem descendentes)")
                 continue
             
             if is_phone_debug:
-                print(f"    Caminho coletado ({len(path)} tokens): {[t.text for t in path[:5]]}")
+                debug_print(f"    Caminho coletado ({len(path)} tokens): {[t.text for t in path[:5]]}")
             
             # Construir candidatos do caminho (do mais completo ao mais simples)
             candidates = self._build_candidate_strings_from_path(path)
             
             if is_phone_debug:
-                print(f"    Candidatos gerados ({len(candidates)}):")
+                debug_print(f"    Candidatos gerados ({len(candidates)}):")
                 for i, cand in enumerate(candidates[:5]):
-                    print(f"      [{i}] '{cand}'")
+                    debug_print(f"      [{i}] '{cand}'")
             
             # Testar cada candidato contra as hints (do mais completo ao mais simples)
             for cand_idx, candidate_text in enumerate(candidates):
                 for hint in specific_hints:
                     detect_result = hint.detect(candidate_text)
                     if is_phone_debug:
-                        print(f"      Candidato [{cand_idx}] '{candidate_text}' vs hint '{hint.name}': {detect_result}")
+                        debug_print(f"      Candidato [{cand_idx}] '{candidate_text}' vs hint '{hint.name}': {detect_result}")
                     
                     if detect_result:
                         # Candidato encaixa na hint → retornar
                         if is_phone_debug:
-                            print(f"  [RESULTADO] '{candidate_text}' (hint '{hint.name}' detectou)")
+                            debug_print(f"  [RESULTADO] '{candidate_text}' (hint '{hint.name}' detectou)")
                         return candidate_text
         
         # Nenhum caminho encaixou nas hints → retornar None
         if is_phone_debug:
-            print(f"  [RESULTADO] None (nenhum candidato passou nas hints)")
+            debug_print(f"  [RESULTADO] None (nenhum candidato passou nas hints)")
         return None
     
     

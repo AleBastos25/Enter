@@ -16,7 +16,8 @@ export function useExtraction() {
       label: string,
       schema: Record<string, string> | string,
       pdfFiles: File[],
-      devMode: boolean = false
+      devMode: boolean = false,
+      useLearning: boolean = true
     ): Promise<RunResult[]> => {
       setState("uploading");
       setError(null);
@@ -40,7 +41,8 @@ export function useExtraction() {
           label,
           schema,
           pdfFiles,
-          devMode
+          devMode,
+          useLearning
         );
         console.log("[useExtraction] Resposta recebida:", response);
 

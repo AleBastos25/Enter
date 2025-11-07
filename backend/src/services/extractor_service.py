@@ -5,6 +5,18 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable, Tuple
 
+# Importar debug helper
+try:
+    from utils.debug import debug_print, error_print, set_debug_mode
+except ImportError:
+    # Fallback se não conseguir importar
+    def debug_print(*args, **kwargs):
+        pass
+    def error_print(*args, **kwargs):
+        print(*args, file=sys.stderr, **kwargs)
+    def set_debug_mode(enabled: bool):
+        pass
+
 # Adicionar raiz do projeto ao path
 # backend/src/services/extractor_service.py
 # -> backend/src/services (0 níveis acima - é o próprio)
@@ -15,52 +27,50 @@ backend_src = Path(__file__).parent.parent  # backend/src
 backend_dir = backend_src.parent            # backend
 project_root = backend_dir.parent           # raiz do projeto (correto!)
 
-print(f"[EXTRACTOR_SERVICE] backend_src: {backend_src}", flush=True)
-print(f"[EXTRACTOR_SERVICE] project_root: {project_root}", flush=True)
+debug_print(f"[EXTRACTOR_SERVICE] backend_src: {backend_src}")
+debug_print(f"[EXTRACTOR_SERVICE] project_root: {project_root}")
 
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
-    print(f"[EXTRACTOR_SERVICE] Adicionado project_root ao path: {project_root}", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] Adicionado project_root ao path: {project_root}")
 
 if str(backend_src) not in sys.path:
     sys.path.insert(0, str(backend_src))
-    print(f"[EXTRACTOR_SERVICE] Adicionado backend_src ao path: {backend_src}", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] Adicionado backend_src ao path: {backend_src}")
 
 # Verificar se o módulo existe
 graph_extractor_path = project_root / "src" / "graph_extractor"
-print(f"[EXTRACTOR_SERVICE] Verificando graph_extractor em: {graph_extractor_path}", flush=True)
+debug_print(f"[EXTRACTOR_SERVICE] Verificando graph_extractor em: {graph_extractor_path}")
 if not graph_extractor_path.exists():
     raise ImportError(f"graph_extractor não encontrado em: {graph_extractor_path}")
 
 # Verificar se __init__.py existe
 init_file = graph_extractor_path / "__init__.py"
-print(f"[EXTRACTOR_SERVICE] Verificando __init__.py: {init_file} (existe: {init_file.exists()})", flush=True)
+debug_print(f"[EXTRACTOR_SERVICE] Verificando __init__.py: {init_file} (existe: {init_file.exists()})")
 
 # Verificar se extractor.py existe
 extractor_file = graph_extractor_path / "extractor.py"
-print(f"[EXTRACTOR_SERVICE] Verificando extractor.py: {extractor_file} (existe: {extractor_file.exists()})", flush=True)
+debug_print(f"[EXTRACTOR_SERVICE] Verificando extractor.py: {extractor_file} (existe: {extractor_file.exists()})")
 
 try:
-    print(f"[EXTRACTOR_SERVICE] Tentando importar módulo src.graph_extractor...", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] Tentando importar módulo src.graph_extractor...")
     import src.graph_extractor as graph_extractor_module
-    print(f"[EXTRACTOR_SERVICE] Módulo src.graph_extractor importado: {graph_extractor_module}", flush=True)
-    print(f"[EXTRACTOR_SERVICE] Diretório do módulo: {graph_extractor_module.__file__ if hasattr(graph_extractor_module, '__file__') else 'N/A'}", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] Módulo src.graph_extractor importado: {graph_extractor_module}")
+    debug_print(f"[EXTRACTOR_SERVICE] Diretório do módulo: {graph_extractor_module.__file__ if hasattr(graph_extractor_module, '__file__') else 'N/A'}")
     
-    print(f"[EXTRACTOR_SERVICE] Tentando importar GraphSchemaExtractor...", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] Tentando importar GraphSchemaExtractor...")
     from src.graph_extractor import GraphSchemaExtractor
-    print(f"[EXTRACTOR_SERVICE] GraphSchemaExtractor importado com sucesso: {GraphSchemaExtractor}", flush=True)
-    print(f"[EXTRACTOR_SERVICE] Tipo: {type(GraphSchemaExtractor)}", flush=True)
+    debug_print(f"[EXTRACTOR_SERVICE] GraphSchemaExtractor importado com sucesso: {GraphSchemaExtractor}")
+    debug_print(f"[EXTRACTOR_SERVICE] Tipo: {type(GraphSchemaExtractor)}")
 except ImportError as e:
-    print(f"[EXTRACTOR_SERVICE] ERRO ao importar GraphSchemaExtractor: {e}", flush=True)
+    error_print(f"[EXTRACTOR_SERVICE] ERRO ao importar GraphSchemaExtractor: {e}")
     import traceback
     traceback.print_exc()
-    sys.stdout.flush()
     raise
 except Exception as e:
-    print(f"[EXTRACTOR_SERVICE] ERRO INESPERADO ao importar: {type(e).__name__}: {e}", flush=True)
+    error_print(f"[EXTRACTOR_SERVICE] ERRO INESPERADO ao importar: {type(e).__name__}: {e}")
     import traceback
     traceback.print_exc()
-    sys.stdout.flush()
     raise
 
 from services.graph_generator import graph_generator
@@ -74,11 +84,12 @@ class ExtractorService:
         self._extractor: Optional[GraphSchemaExtractor] = None
         self._debug_extractor: Optional[GraphSchemaExtractor] = None
     
-    def get_extractor(self, debug: bool = False) -> GraphSchemaExtractor:
+    def get_extractor(self, debug: bool = False, use_learning: bool = True) -> GraphSchemaExtractor:
         """Obtém instância do extrator (singleton ou debug).
         
         Args:
             debug: Se True, usa extractor com debug ativado (separado)
+            use_learning: Se True, usa aprendizado incremental
             
         Returns:
             Instância do GraphSchemaExtractor
@@ -86,60 +97,60 @@ class ExtractorService:
         import sys
         
         if debug:
+            # Configurar modo debug global
+            set_debug_mode(True)
             # Extrator com debug (separado para não afetar o normal)
             if self._debug_extractor is None:
-                print(f"[GET_EXTRACTOR] Inicializando extractor DEBUG...", flush=True)
-                sys.stdout.flush()
+                debug_print(f"[GET_EXTRACTOR] Inicializando extractor DEBUG...")
                 try:
                     # Usar EXATAMENTE os mesmos parâmetros do teste
-                    print(f"[GET_EXTRACTOR] Parâmetros: embedding_model=BAAI/bge-small-en-v1.5, llm_model=gpt-4o-mini, debug=True", flush=True)
+                    debug_print(f"[GET_EXTRACTOR] Parâmetros: embedding_model=BAAI/bge-small-en-v1.5, llm_model=gpt-4o-mini, debug=True")
                     self._debug_extractor = GraphSchemaExtractor(
                         embedding_model="BAAI/bge-small-en-v1.5",
                         min_embedding_similarity=0.3,
                         tiebreak_threshold=0.05,
                         llm_model="gpt-4o-mini",  # Teste usa "gpt-5-mini" mas esse não existe, usar gpt-4o-mini
                         use_llm_tiebreaker=True,
-                        debug=True  # Debug ativado
+                        debug=True,  # Debug ativado
+                        use_learning=use_learning
                     )
-                    print(f"[GET_EXTRACTOR] Extrator DEBUG inicializado com sucesso", flush=True)
-                    print(f"[GET_EXTRACTOR] Tipo do extractor: {type(self._debug_extractor)}", flush=True)
-                    sys.stdout.flush()
+                    debug_print(f"[GET_EXTRACTOR] Extrator DEBUG inicializado com sucesso")
+                    debug_print(f"[GET_EXTRACTOR] Tipo do extractor: {type(self._debug_extractor)}")
                 except Exception as e:
-                    print(f"[GET_EXTRACTOR] ERRO ao inicializar GraphSchemaExtractor (debug): {e}", flush=True)
+                    error_print(f"[GET_EXTRACTOR] ERRO ao inicializar GraphSchemaExtractor (debug): {e}")
                     import traceback
                     traceback.print_exc()
-                    sys.stdout.flush()
                     raise
             else:
-                print(f"[GET_EXTRACTOR] Reutilizando extractor DEBUG existente", flush=True)
+                debug_print(f"[GET_EXTRACTOR] Reutilizando extractor DEBUG existente")
             return self._debug_extractor
         else:
+            # Configurar modo debug global
+            set_debug_mode(False)
             # Extrator normal (sem debug)
             if self._extractor is None:
-                print(f"[GET_EXTRACTOR] Inicializando extractor NORMAL...", flush=True)
-                sys.stdout.flush()
+                debug_print(f"[GET_EXTRACTOR] Inicializando extractor NORMAL...")
                 try:
                     # Usar EXATAMENTE os mesmos parâmetros do teste
-                    print(f"[GET_EXTRACTOR] Parâmetros: embedding_model=BAAI/bge-small-en-v1.5, llm_model=gpt-4o-mini, debug=False", flush=True)
+                    debug_print(f"[GET_EXTRACTOR] Parâmetros: embedding_model=BAAI/bge-small-en-v1.5, llm_model=gpt-4o-mini, debug=False")
                     self._extractor = GraphSchemaExtractor(
                         embedding_model="BAAI/bge-small-en-v1.5",
                         min_embedding_similarity=0.3,
                         tiebreak_threshold=0.05,
                         llm_model="gpt-4o-mini",
                         use_llm_tiebreaker=True,
-                        debug=False  # Sem debug
+                        debug=False,  # Sem debug
+                        use_learning=use_learning
                     )
-                    print(f"[GET_EXTRACTOR] Extrator NORMAL inicializado com sucesso", flush=True)
-                    print(f"[GET_EXTRACTOR] Tipo do extractor: {type(self._extractor)}", flush=True)
-                    sys.stdout.flush()
+                    debug_print(f"[GET_EXTRACTOR] Extrator NORMAL inicializado com sucesso")
+                    debug_print(f"[GET_EXTRACTOR] Tipo do extractor: {type(self._extractor)}")
                 except Exception as e:
-                    print(f"[GET_EXTRACTOR] ERRO ao inicializar GraphSchemaExtractor: {e}", flush=True)
+                    error_print(f"[GET_EXTRACTOR] ERRO ao inicializar GraphSchemaExtractor: {e}")
                     import traceback
                     traceback.print_exc()
-                    sys.stdout.flush()
                     raise
             else:
-                print(f"[GET_EXTRACTOR] Reutilizando extractor NORMAL existente", flush=True)
+                debug_print(f"[GET_EXTRACTOR] Reutilizando extractor NORMAL existente")
             return self._extractor
     
     def generate_run_id(self, filename: str) -> str:
@@ -178,7 +189,8 @@ class ExtractorService:
         filename: str,
         on_progress: Optional[Callable[[str], None]] = None,
         generate_graph: bool = False,
-        debug: bool = False
+        debug: bool = False,
+        use_learning: bool = True
     ) -> Dict[str, Any]:
         """Processa um único PDF.
         
@@ -213,43 +225,39 @@ class ExtractorService:
             if on_progress:
                 on_progress(step)
         
-        import sys
+        # Configurar modo debug baseado no parâmetro
+        set_debug_mode(debug)
         
         try:
-            print(f"[PROCESS_PDF] Iniciando processamento de {filename}", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[PROCESS_PDF] Iniciando processamento de {filename}")
             
             if debug:
-                print(f"\n{'='*80}")
-                print(f"INICIANDO EXTRAÇÃO (MODO DEV)")
-                print(f"  PDF: {filename} ({pdf_path})")
-                print(f"  Label: {label}")
-                print(f"  Schema: {list(schema.keys())}")
-                print(f"{'='*80}\n")
-                sys.stdout.flush()
+                debug_print(f"\n{'='*80}")
+                debug_print(f"INICIANDO EXTRAÇÃO (MODO DEV)")
+                debug_print(f"  PDF: {filename} ({pdf_path})")
+                debug_print(f"  Label: {label}")
+                debug_print(f"  Schema: {list(schema.keys())}")
+                debug_print(f"{'='*80}\n")
             
             pdf_path_obj = Path(pdf_path)
-            print(f"[PROCESS_PDF] Verificando PDF: {pdf_path}", flush=True)
+            debug_print(f"[PROCESS_PDF] Verificando PDF: {pdf_path}")
             if not pdf_path_obj.exists():
-                print(f"[PROCESS_PDF] ERRO: PDF não encontrado!", flush=True)
+                error_print(f"[PROCESS_PDF] ERRO: PDF não encontrado!")
                 raise FileNotFoundError(f"PDF não encontrado: {pdf_path}")
-            print(f"[PROCESS_PDF] PDF existe: OK", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[PROCESS_PDF] PDF existe: OK")
             
             # Obter extractor apropriado (com ou sem debug)
-            print(f"[PROCESS_PDF] Obtendo extractor (debug={debug})...", flush=True)
-            extractor = self.get_extractor(debug=debug)
-            print(f"[PROCESS_PDF] Extractor obtido", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[PROCESS_PDF] Obtendo extractor (debug={debug}, use_learning={use_learning})...")
+            extractor = self.get_extractor(debug=debug, use_learning=use_learning)
+            debug_print(f"[PROCESS_PDF] Extractor obtido")
             
             # Executar extração (igual ao teste, mas com on_progress opcional)
-            print(f"[PROCESS_PDF] Chamando extractor.extract()...", flush=True)
-            print(f"[PROCESS_PDF] Parâmetros do extract:", flush=True)
-            print(f"[PROCESS_PDF]   - label: {label}", flush=True)
-            print(f"[PROCESS_PDF]   - pdf_path: {pdf_path}", flush=True)
-            print(f"[PROCESS_PDF]   - schema keys: {list(schema.keys())}", flush=True)
-            print(f"[PROCESS_PDF]   - on_progress: {on_progress is not None}", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[PROCESS_PDF] Chamando extractor.extract()...")
+            debug_print(f"[PROCESS_PDF] Parâmetros do extract:")
+            debug_print(f"[PROCESS_PDF]   - label: {label}")
+            debug_print(f"[PROCESS_PDF]   - pdf_path: {pdf_path}")
+            debug_print(f"[PROCESS_PDF]   - schema keys: {list(schema.keys())}")
+            debug_print(f"[PROCESS_PDF]   - on_progress: {on_progress is not None}")
             
             try:
                 result = extractor.extract(
@@ -259,33 +267,30 @@ class ExtractorService:
                     on_progress=progress_callback if on_progress else None
                 )
                 
-                print(f"[PROCESS_PDF] extractor.extract() RETORNOU", flush=True)
-                print(f"[PROCESS_PDF] Tipo do resultado: {type(result)}", flush=True)
+                debug_print(f"[PROCESS_PDF] extractor.extract() RETORNOU")
+                debug_print(f"[PROCESS_PDF] Tipo do resultado: {type(result)}")
                 if isinstance(result, dict):
-                    print(f"[PROCESS_PDF] Keys do resultado: {list(result.keys())}", flush=True)
-                sys.stdout.flush()
+                    debug_print(f"[PROCESS_PDF] Keys do resultado: {list(result.keys())}")
             except Exception as extract_exception:
-                print(f"[PROCESS_PDF] ERRO durante extractor.extract():", flush=True)
-                print(f"[PROCESS_PDF] Tipo: {type(extract_exception).__name__}", flush=True)
-                print(f"[PROCESS_PDF] Mensagem: {str(extract_exception)}", flush=True)
+                error_print(f"[PROCESS_PDF] ERRO durante extractor.extract():")
+                error_print(f"[PROCESS_PDF] Tipo: {type(extract_exception).__name__}")
+                error_print(f"[PROCESS_PDF] Mensagem: {str(extract_exception)}")
                 import traceback
                 traceback.print_exc()
-                sys.stdout.flush()
                 raise
             
             elapsed_ms = int((time.time() - start_time) * 1000)
             
             if debug:
-                print(f"\n{'='*80}")
-                print(f"EXTRAÇÃO CONCLUÍDA (MODO DEV)")
-                print(f"  Status: OK")
-                print(f"  Tempo: {elapsed_ms}ms")
-                print(f"{'='*80}\n")
-                sys.stdout.flush()
+                debug_print(f"\n{'='*80}")
+                debug_print(f"EXTRAÇÃO CONCLUÍDA (MODO DEV)")
+                debug_print(f"  Status: OK")
+                debug_print(f"  Tempo: {elapsed_ms}ms")
+                debug_print(f"{'='*80}\n")
             
             if debug:
-                print(f"  Resultado tipo: {type(result)}")
-                print(f"  Keys do resultado: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+                debug_print(f"  Resultado tipo: {type(result)}")
+                debug_print(f"  Keys do resultado: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
             
             # Verificar se result é um dict válido
             if not isinstance(result, dict):
@@ -294,15 +299,13 @@ class ExtractorService:
             # Extrair campos
             fields = result.get("fields", {})
             if not isinstance(fields, dict):
-                if debug:
-                    print(f"AVISO: 'fields' não é um dict: {type(fields)}")
+                debug_print(f"AVISO: 'fields' não é um dict: {type(fields)}")
                 fields = {}
             
             # Extrair regras usadas
             metadata = result.get("metadata", {})
             if not isinstance(metadata, dict):
-                if debug:
-                    print(f"AVISO: 'metadata' não é um dict: {type(metadata)}")
+                debug_print(f"AVISO: 'metadata' não é um dict: {type(metadata)}")
                 metadata = {}
             
             strategies_breakdown = metadata.get("strategies_breakdown", {})
@@ -318,26 +321,22 @@ class ExtractorService:
                 else:
                     # Converter para string se não for tipo básico
                     serializable_fields[key] = str(value)
-                    if debug:
-                        print(f"AVISO: Campo '{key}' convertido para string: {type(value)}")
+                    debug_print(f"AVISO: Campo '{key}' convertido para string: {type(value)}")
             
             # Gerar HTML do grafo se solicitado
             graph_url = None
             if generate_graph:
                 try:
-                    if debug:
-                        print(f"Gerando HTML do grafo para {filename}...")
+                    debug_print(f"Gerando HTML do grafo para {filename}...")
                     graph_url = graph_generator.generate_graph_html(
                         pdf_path=pdf_path,
                         run_id=run_id,
                         label=label
                     )
-                    if debug:
-                        print(f"HTML do grafo gerado: {graph_url}")
+                    debug_print(f"HTML do grafo gerado: {graph_url}")
                 except Exception as e:
                     # Não falhar a extração se o HTML não puder ser gerado
-                    if debug:
-                        print(f"Aviso: Erro ao gerar HTML do grafo: {e}")
+                    debug_print(f"Aviso: Erro ao gerar HTML do grafo: {e}")
             
             response_dict = {
                 "run_id": run_id,
@@ -352,8 +351,7 @@ class ExtractorService:
                 }
             }
             
-            if debug:
-                print(f"Resposta preparada: status=ok, campos={len(serializable_fields)}, tempo={elapsed_ms}ms")
+            debug_print(f"Resposta preparada: status=ok, campos={len(serializable_fields)}, tempo={elapsed_ms}ms")
             
             return response_dict
             
@@ -361,11 +359,11 @@ class ExtractorService:
             elapsed_ms = int((time.time() - start_time) * 1000)
             error_msg = str(e)
             if debug:
-                print(f"\n{'='*80}")
-                print(f"ERRO NA EXTRAÇÃO (MODO DEV)")
-                print(f"  Erro: {error_msg}")
-                print(f"  Tempo até erro: {elapsed_ms}ms")
-                print(f"{'='*80}\n")
+                debug_print(f"\n{'='*80}")
+                debug_print(f"ERRO NA EXTRAÇÃO (MODO DEV)")
+                debug_print(f"  Erro: {error_msg}")
+                debug_print(f"  Tempo até erro: {elapsed_ms}ms")
+                debug_print(f"{'='*80}\n")
                 import traceback
                 traceback.print_exc()
             
@@ -392,7 +390,8 @@ class ExtractorService:
         schema: Dict[str, str],
         on_progress: Optional[Callable[[str, int, int], None]] = None,  # (step, current, total)
         generate_graph: bool = False,
-        debug: bool = False
+        debug: bool = False,
+        use_learning: bool = True
     ) -> List[Dict[str, Any]]:
         """Processa múltiplos PDFs sequencialmente.
         
@@ -402,41 +401,37 @@ class ExtractorService:
             schema: Schema de extração
             on_progress: Callback de progresso global (step, current_index, total)
             generate_graph: Se True, gera HTML do grafo para cada PDF
+            debug: Se True, ativa modo debug
+            use_learning: Se True, usa aprendizado incremental
             
         Returns:
             Lista de resultados na ordem de processamento
         """
-        import sys
-        sys.stdout.flush()
-        print(f"[SERVICE] process_multiple_pdfs INICIADO", flush=True)
-        print(f"[SERVICE] Total de PDFs: {len(pdf_files)}, Debug: {debug}", flush=True)
-        sys.stdout.flush()
+        # Configurar modo debug
+        set_debug_mode(debug)
+        
+        debug_print(f"[SERVICE] process_multiple_pdfs INICIADO")
+        debug_print(f"[SERVICE] Total de PDFs: {len(pdf_files)}, Debug: {debug}")
         
         results = []
         total = len(pdf_files)
         
         for idx, (pdf_path, filename) in enumerate(pdf_files, 1):
-            print(f"[SERVICE] ===== PDF {idx}/{total}: {filename} =====", flush=True)
-            sys.stdout.flush()
+            debug_print(f"[SERVICE] ===== PDF {idx}/{total}: {filename} =====")
             
             if debug:
-                print(f"\n{'#'*80}")
-                print(f"# PROCESSANDO PDF {idx}/{total}: {filename}")
-                print(f"{'#'*80}\n")
-                sys.stdout.flush()
+                debug_print(f"\n{'#'*80}")
+                debug_print(f"# PROCESSANDO PDF {idx}/{total}: {filename}")
+                debug_print(f"{'#'*80}\n")
             
             # Callback de progresso por PDF
             def pdf_progress(step: str) -> None:
-                print(f"[SERVICE] [{idx}/{total}] Progresso: {step}", flush=True)
-                if debug:
-                    print(f"  [PROGRESSO] [{idx}/{total}] {step}", flush=True)
+                debug_print(f"[SERVICE] [{idx}/{total}] Progresso: {step}")
                 if on_progress:
                     on_progress(step, idx, total)
-                sys.stdout.flush()
             
             try:
-                print(f"[SERVICE] Chamando process_pdf para {filename}...", flush=True)
-                sys.stdout.flush()
+                debug_print(f"[SERVICE] Chamando process_pdf para {filename}...")
                 
                 result = self.process_pdf(
                     pdf_path=pdf_path,
@@ -445,30 +440,28 @@ class ExtractorService:
                     filename=filename,
                     on_progress=pdf_progress,
                     generate_graph=generate_graph,
-                    debug=debug
+                    debug=debug,
+                    use_learning=use_learning
                 )
                 
-                print(f"[SERVICE] process_pdf RETORNOU para {filename}", flush=True)
+                debug_print(f"[SERVICE] process_pdf RETORNOU para {filename}")
                 results.append(result)
                 
                 if debug:
-                    print(f"\n{'#'*80}")
-                    print(f"# PDF {idx}/{total} ({filename}) CONCLUÍDO: {result['status']}")
-                    print(f"{'#'*80}\n")
-                sys.stdout.flush()
+                    debug_print(f"\n{'#'*80}")
+                    debug_print(f"# PDF {idx}/{total} ({filename}) CONCLUÍDO: {result['status']}")
+                    debug_print(f"{'#'*80}\n")
                 
             except Exception as e:
-                print(f"[SERVICE] ERRO ao processar {filename}: {e}", flush=True)
+                error_print(f"[SERVICE] ERRO ao processar {filename}: {e}")
                 import traceback
                 traceback.print_exc()
-                sys.stdout.flush()
                 
                 if debug:
-                    print(f"\n{'#'*80}")
-                    print(f"# ERRO ao processar PDF {idx}/{total} ({filename})")
-                    print(f"# Erro: {e}")
-                    print(f"{'#'*80}\n")
-                    sys.stdout.flush()
+                    debug_print(f"\n{'#'*80}")
+                    debug_print(f"# ERRO ao processar PDF {idx}/{total} ({filename})")
+                    debug_print(f"# Erro: {e}")
+                    debug_print(f"{'#'*80}\n")
                 
                 # Adicionar resultado de erro
                 results.append({
@@ -484,8 +477,7 @@ class ExtractorService:
                     }
                 })
         
-        print(f"[SERVICE] process_multiple_pdfs CONCLUÍDO: {len(results)} resultados", flush=True)
-        sys.stdout.flush()
+        debug_print(f"[SERVICE] process_multiple_pdfs CONCLUÍDO: {len(results)} resultados")
         return results
 
 

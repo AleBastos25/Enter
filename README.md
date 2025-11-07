@@ -156,11 +156,14 @@ A versão web oferece uma interface gráfica e uma API REST para extração de d
 
 ```bash
 # No diretório raiz do projeto
-cd backend
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
+# ou
+python -m backend.src.main
 ```
 
 A API estará disponível em `http://localhost:8000`
+
+**Nota para Windows:** Você pode usar o script `start-ui.bat` (duplo clique) ou `.\start-ui.ps1` no PowerShell para iniciar automaticamente o backend e frontend. Veja [START_UI.md](START_UI.md) para mais detalhes.
 
 
 #### Iniciar o Frontend (Interface Web)
@@ -224,7 +227,11 @@ python scripts/batch_extract.py --input data/samples --output results.json --qui
 # Copiar template de secrets
 cp configs/secrets.yaml.example configs/secrets.yaml
 # Editar e adicionar sua OPENAI_API_KEY
+# Windows: notepad configs/secrets.yaml
+# Linux/Mac: nano configs/secrets.yaml
 ```
+
+**Importante:** O arquivo `secrets.yaml` é git-ignored. Use o template `secrets.yaml.example` como base.
 
 
 ## Tipos de Campos e Validadores

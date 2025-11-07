@@ -405,9 +405,14 @@ python scripts/batch_extract.py --help
 #### Teste Backend
 
 ```bash
-# Ativar ambiente virtual
-cd backend
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+# Ativar ambiente virtual (se necessário)
+# Windows: .\venv\Scripts\Activate.ps1
+# Linux/Mac: source venv/bin/activate
+
+# No diretório raiz do projeto
+uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
+# ou
+python -m backend.src.main
 ```
 
 Acesse `http://localhost:8000/docs` para ver a documentação da API.
@@ -497,8 +502,8 @@ sudo chown -R $USER:$USER ~/.npm
 ### Porta já em uso
 
 ```bash
-# Backend - usar outra porta
-uvicorn src.main:app --port 8001
+# Backend - usar outra porta (no diretório raiz do projeto)
+uvicorn backend.src.main:app --port 8001
 
 # Frontend - usar outra porta
 cd frontend

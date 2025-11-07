@@ -50,9 +50,10 @@ Reinicie o terminal e verifique: `node --version` e `npm --version`
 ### 2. Backend
 
 ```bash
-# Instalar dependências
-cd backend
+# No diretório raiz do projeto
+# Instalar dependências (se ainda não instalou)
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Executar servidor
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
@@ -61,6 +62,8 @@ python -m backend.src.main
 ```
 
 O backend estará disponível em `http://localhost:8000`.
+
+**Nota para Windows:** Você pode usar o script `start-ui.bat` (duplo clique) ou `.\start-ui.ps1` no PowerShell para iniciar automaticamente o backend e frontend. O script `start-ui.bat` pode ser adaptado para rodar em qualquer máquina Windows.
 
 ### 3. Frontend
 

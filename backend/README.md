@@ -5,7 +5,9 @@ API FastAPI para extração de dados de PDFs usando Graph Extractor.
 ## Instalação
 
 ```bash
+# No diretório raiz do projeto
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ## Execução
@@ -54,12 +56,21 @@ Extrai dados de múltiplos PDFs.
 
 Retorna HTML do grafo para uma execução (apenas em dev_mode).
 
-## Variáveis de Ambiente
+## Configuração
 
-Crie um arquivo `.env` na raiz do projeto:
+### Secrets (para LLM/OpenAI embeddings)
 
-```env
-# Opcional: configurações de CORS
-CORS_ORIGINS=http://localhost:3000
+```bash
+# Copiar template de secrets
+cp configs/secrets.yaml.example configs/secrets.yaml
+# Editar e adicionar sua OPENAI_API_KEY
+# Windows: notepad configs/secrets.yaml
+# Linux/Mac: nano configs/secrets.yaml
 ```
+
+**Importante:** O arquivo `secrets.yaml` é git-ignored. Use o template `secrets.yaml.example` como base.
+
+### Variáveis de Ambiente (Frontend)
+
+O frontend usa a variável `NEXT_PUBLIC_API_URL` (padrão: `http://localhost:8000`). Configure em `.env.local` no diretório `frontend/` se necessário.
 

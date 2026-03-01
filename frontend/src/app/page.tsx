@@ -147,7 +147,7 @@ export default function Home() {
             const timestamp = Date.now();
             const newPage: Page = {
               id: `page_${timestamp}`,
-              title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
+              title: `New Session ${new Date().toLocaleString("en-US", { 
                 day: "2-digit", 
                 month: "2-digit", 
                 hour: "2-digit", 
@@ -212,7 +212,7 @@ export default function Home() {
             console.warn(`[Page] Página ${finalPageId} não encontrada, criando nova com mesmo ID...`);
             const newPage: Page = {
               id: finalPageId,
-              title: `Nova Sessão ${new Date().toLocaleString("pt-BR", { 
+              title: `New Session ${new Date().toLocaleString("en-US", { 
                 day: "2-digit", 
                 month: "2-digit", 
                 hour: "2-digit", 
@@ -353,7 +353,7 @@ export default function Home() {
             createdAt: Date.now(),
             run: {
               run_id: `processing_${Date.now()}_${i}`,
-              filename: `Processando ${pdfFile.name}...`,
+              filename: `Processing ${pdfFile.name}...`,
               status: "processing",
               result: undefined,
               error_message: undefined,
@@ -524,10 +524,10 @@ export default function Home() {
             createdAt: Date.now(),
             run: {
               run_id: `error_${Date.now()}`,
-              filename: "Erro",
+              filename: "Error",
               status: "error",
               result: undefined,
-              error_message: err.response?.data?.detail || err.message || "Erro desconhecido",
+              error_message: err.response?.data?.detail || err.message || "Unknown error",
               dev: undefined,
             },
           };
@@ -539,7 +539,7 @@ export default function Home() {
           setUpdateTrigger((prev) => prev + 1);
         } else {
           // Se não encontrou página, mostrar erro genérico
-          alert(`Erro: ${err.response?.data?.detail || err.message || "Erro desconhecido"}`);
+          alert(`Error: ${err.response?.data?.detail || err.message || "Unknown error"}`);
         }
       } finally {
         // Sempre liberar a trava no final
@@ -564,12 +564,12 @@ export default function Home() {
         // Criar nova página
         const newPage: Page = {
           id: pageId,
-          title: `Nova Extração ${new Date().toLocaleString("pt-BR", { 
-            day: "2-digit", 
-            month: "2-digit", 
-            hour: "2-digit", 
-            minute: "2-digit" 
-          })}`,
+              title: `New Extraction ${new Date().toLocaleString("en-US", { 
+                day: "2-digit", 
+                month: "2-digit", 
+                hour: "2-digit", 
+                minute: "2-digit" 
+              })}`,
           createdAt: Date.now(),
           messages: [],
         };
@@ -600,7 +600,7 @@ export default function Home() {
   if (!isLoaded) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#000000] text-white">
-        <div className="text-lg">Carregando...</div>
+        <div className="text-lg">Loading...</div>
       </div>
     );
   }

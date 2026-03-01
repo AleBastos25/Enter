@@ -1,109 +1,103 @@
-# Guia de Instalação - Document Extraction System
+# Installation Guide - Document Extraction System
 
-Este guia fornece instruções passo a passo para instalar e configurar o sistema em diferentes plataformas.
+This guide provides step-by-step instructions to install and configure the system on different platforms.
 
-##  Aviso 
+## Prerequisites
 
-**Validação de Instalação:**
-- ✅ **Windows**: Instruções validadas e testadas na máquina do desenvolvedor
-- ⚠️ **Linux e macOS**: Instruções baseadas em documentação e assistência de IA (GPT-5). **Não foram testadas em ambiente real**. Se encontrar problemas, por favor reporte ou ajuste conforme sua distribuição/versão do sistema operacional.
+- **Python 3.10+** (recommended: Python 3.11 or 3.12)
+- **Node.js 18+** and **npm** (only for web interface)
+- **Git** (to clone the repository)
 
-## Pré-requisitos
-
-- **Python 3.10+** (recomendado: Python 3.11 ou 3.12)
-- **Node.js 18+** e **npm** (apenas para interface web)
-- **Git** (para clonar o repositório)
-
-## Instalação por Plataforma
+## Installation by Platform
 
 ### Windows
 
-#### 1. Instalar Python
+#### 1. Install Python
 
-**Opção A: Instalador Oficial (Recomendado)**
+**Option A: Official Installer (Recommended)**
 
-1. Baixe Python 3.11+ de https://www.python.org/downloads/
-2. Durante a instalação:
-   - ✅ Marque "Add Python to PATH"
-   - ✅ Marque "Install pip"
-3. Reinicie o PowerShell/Terminal
-4. Verifique a instalação:
+1. Download Python 3.11+ from https://www.python.org/downloads/
+2. During installation:
+   - ✅ Check "Add Python to PATH"
+   - ✅ Check "Install pip"
+3. Restart PowerShell/Terminal
+4. Verify installation:
    ```powershell
    python --version
    pip --version
    ```
 
-**Opção B: Chocolatey**
+**Option B: Chocolatey**
 
 ```powershell
 choco install python311
 ```
 
-**Opção C: winget**
+**Option C: winget**
 
 ```powershell
 winget install Python.Python.3.11
 ```
 
-#### 2. Instalar Node.js (para interface web)
+#### 2. Install Node.js (for web interface)
 
-**Opção A: Instalador Oficial**
+**Option A: Official Installer**
 
-1. Baixe Node.js LTS de https://nodejs.org/
-2. Execute o instalador `.msi`
-3. Durante a instalação:
-   - ✅ Marque "Add to PATH"
-4. Reinicie o PowerShell/Terminal
-5. Verifique:
+1. Download Node.js LTS from https://nodejs.org/
+2. Run the `.msi` installer
+3. During installation:
+   - ✅ Check "Add to PATH"
+4. Restart PowerShell/Terminal
+5. Verify:
    ```powershell
    node --version
    npm --version
    ```
 
-**Opção B: Chocolatey**
+**Option B: Chocolatey**
 
 ```powershell
 choco install nodejs-lts
 ```
 
-**Opção C: winget**
+**Option C: winget**
 
 ```powershell
 winget install OpenJS.NodeJS.LTS
 ```
 
-#### 3. Clonar e Configurar o Projeto
+#### 3. Clone and Configure the Project
 
 ```powershell
-# Clonar repositório (se aplicável)
+# Clone repository (if applicable)
 git clone <url-do-repositorio>
 cd Enter
 
-# Criar ambiente virtual
+# Create virtual environment
 python -m venv venv
 
-# Ativar ambiente virtual
+# Activate virtual environment
 .\venv\Scripts\Activate.ps1
 
-# Se houver erro de política de execução, execute:
+# If there's an execution policy error, run:
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-# Instalar dependências Python
+# Install Python dependencies
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 ```
 
-#### 4. Configurar Secrets (Opcional - para LLM)
+#### 4. Configure Secrets (Optional - for LLM)
 
 ```powershell
-# Copiar template de secrets
+# Copy secrets template
 Copy-Item configs/secrets.yaml.example configs/secrets.yaml
 
-# Editar e adicionar sua OPENAI_API_KEY
+# Edit and add your OPENAI_API_KEY
 notepad configs/secrets.yaml
 ```
 
-#### 5. Instalar Dependências do Frontend
+#### 5. Install Frontend Dependencies
 
 ```powershell
 cd frontend
@@ -111,18 +105,18 @@ npm install
 cd ..
 ```
 
-#### 6. Verificar Instalação
+#### 6. Verify Installation
 
 ```powershell
-# Testar Python
+# Test Python
 python --version
 python -c "import sys; print(sys.version)"
 
-# Testar Node.js
+# Test Node.js
 node --version
 npm --version
 
-# Testar imports Python
+# Test Python imports
 python -c "from src.graph_extractor import GraphSchemaExtractor; print('OK')"
 ```
 
@@ -130,25 +124,25 @@ python -c "from src.graph_extractor import GraphSchemaExtractor; print('OK')"
 
 ### Linux (Ubuntu/Debian)
 
-#### 1. Atualizar Sistema
+#### 1. Update System
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
 ```
 
-#### 2. Instalar Python 3.11+
+#### 2. Install Python 3.11+
 
 ```bash
-# Instalar Python 3.11 e ferramentas
+# Install Python 3.11 and tools
 sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
 
-# Verificar instalação
+# Verify installation
 python3.11 --version
 pip3 --version
 ```
 
-**Nota:** Se sua distribuição não tiver Python 3.11, use o deadsnakes PPA:
+**Note:** If your distribution doesn't have Python 3.11, use the deadsnakes PPA:
 
 ```bash
 sudo apt install -y software-properties-common
@@ -157,82 +151,82 @@ sudo apt update
 sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
 ```
 
-#### 3. Instalar Node.js 18+ (para interface web)
+#### 3. Install Node.js 18+ (for web interface)
 
-**Opção A: NodeSource (Recomendado)**
+**Option A: NodeSource (Recommended)**
 
 ```bash
-# Instalar Node.js 20.x LTS
+# Install Node.js 20.x LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Opção B: nvm (Node Version Manager)**
+**Option B: nvm (Node Version Manager)**
 
 ```bash
-# Instalar nvm
+# Install nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# Recarregar shell
+# Reload shell
 source ~/.bashrc
 
-# Instalar Node.js LTS
+# Install Node.js LTS
 nvm install --lts
 nvm use --lts
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-#### 4. Instalar Dependências do Sistema
+#### 4. Install System Dependencies
 
 ```bash
-# Dependências para compilação de pacotes Python
+# Dependencies for Python package compilation
 sudo apt install -y build-essential gcc g++ make
 
-# Dependências para PDF processing (se necessário)
+# Dependencies for PDF processing (if needed)
 sudo apt install -y poppler-utils
 ```
 
-#### 5. Clonar e Configurar o Projeto
+#### 5. Clone and Configure the Project
 
 ```bash
-# Clonar repositório (se aplicável)
+# Clone repository (if applicable)
 git clone <url-do-repositorio>
 cd Enter
 
-# Criar ambiente virtual
+# Create virtual environment
 python3.11 -m venv venv
 
-# Ativar ambiente virtual
+# Activate virtual environment
 source venv/bin/activate
 
-# Atualizar pip
+# Update pip
 pip install --upgrade pip
 
-# Instalar dependências Python
+# Install Python dependencies
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 ```
 
-#### 6. Configurar Secrets (Opcional - para LLM)
+#### 6. Configure Secrets (Optional - for LLM)
 
 ```bash
-# Copiar template de secrets
+# Copy secrets template
 cp configs/secrets.yaml.example configs/secrets.yaml
 
-# Editar e adicionar sua OPENAI_API_KEY
+# Edit and add your OPENAI_API_KEY
 nano configs/secrets.yaml
-# ou
+# or
 vim configs/secrets.yaml
 ```
 
-#### 7. Instalar Dependências do Frontend
+#### 7. Install Frontend Dependencies
 
 ```bash
 cd frontend
@@ -240,18 +234,18 @@ npm install
 cd ..
 ```
 
-#### 8. Verificar Instalação
+#### 8. Verify Installation
 
 ```bash
-# Testar Python
+# Test Python
 python3.11 --version
 python3.11 -c "import sys; print(sys.version)"
 
-# Testar Node.js
+# Test Node.js
 node --version
 npm --version
 
-# Testar imports Python
+# Test Python imports
 python3.11 -c "from src.graph_extractor import GraphSchemaExtractor; print('OK')"
 ```
 
@@ -259,101 +253,101 @@ python3.11 -c "from src.graph_extractor import GraphSchemaExtractor; print('OK')
 
 ### macOS
 
-#### 1. Instalar Homebrew (se não tiver)
+#### 1. Install Homebrew (if you don't have it)
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-#### 2. Instalar Python 3.11+
+#### 2. Install Python 3.11+
 
 ```bash
-# Instalar Python via Homebrew
+# Install Python via Homebrew
 brew install python@3.11
 
-# Verificar instalação
+# Verify installation
 python3.11 --version
 pip3.11 --version
 
-# Criar alias (opcional)
+# Create alias (optional)
 echo 'alias python3=python3.11' >> ~/.zshrc
 echo 'alias pip3=pip3.11' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-#### 3. Instalar Node.js 18+ (para interface web)
+#### 3. Install Node.js 18+ (for web interface)
 
 ```bash
-# Instalar Node.js LTS via Homebrew
+# Install Node.js LTS via Homebrew
 brew install node@20
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Alternativa: nvm**
+**Alternative: nvm**
 
 ```bash
-# Instalar nvm
+# Install nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# Recarregar shell
+# Reload shell
 source ~/.zshrc
 
-# Instalar Node.js LTS
+# Install Node.js LTS
 nvm install --lts
 nvm use --lts
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-#### 4. Instalar Dependências do Sistema
+#### 4. Install System Dependencies
 
 ```bash
-# Dependências para compilação (geralmente já instaladas com Xcode Command Line Tools)
+# Dependencies for compilation (usually already installed with Xcode Command Line Tools)
 xcode-select --install
 
-# Dependências para PDF processing (se necessário)
+# Dependencies for PDF processing (if needed)
 brew install poppler
 ```
 
-#### 5. Clonar e Configurar o Projeto
+#### 5. Clone and Configure the Project
 
 ```bash
-# Clonar repositório (se aplicável)
+# Clone repository (if applicable)
 git clone <url-do-repositorio>
 cd Enter
 
-# Criar ambiente virtual
+# Create virtual environment
 python3.11 -m venv venv
 
-# Ativar ambiente virtual
+# Activate virtual environment
 source venv/bin/activate
 
-# Atualizar pip
+# Update pip
 pip install --upgrade pip
 
-# Instalar dependências Python
+# Install Python dependencies
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 ```
 
-#### 6. Configurar Secrets (Opcional - para LLM)
+#### 6. Configure Secrets (Optional - for LLM)
 
 ```bash
-# Copiar template de secrets
+# Copy secrets template
 cp configs/secrets.yaml.example configs/secrets.yaml
 
-# Editar e adicionar sua OPENAI_API_KEY
+# Edit and add your OPENAI_API_KEY
 nano configs/secrets.yaml
-# ou
+# or
 open -a TextEdit configs/secrets.yaml
 ```
 
-#### 7. Instalar Dependências do Frontend
+#### 7. Install Frontend Dependencies
 
 ```bash
 cd frontend
@@ -361,28 +355,28 @@ npm install
 cd ..
 ```
 
-#### 8. Verificar Instalação
+#### 8. Verify Installation
 
 ```bash
-# Testar Python
+# Test Python
 python3.11 --version
 python3.11 -c "import sys; print(sys.version)"
 
-# Testar Node.js
+# Test Node.js
 node --version
 npm --version
 
-# Testar imports Python
+# Test Python imports
 python3.11 -c "from src.graph_extractor import GraphSchemaExtractor; print('OK')"
 ```
 
 ---
 
-## Configuração Pós-Instalação
+## Post-Installation Configuration
 
-### 1. Configurar Variáveis de Ambiente (Opcional)
+### 1. Configure Environment Variables (Optional)
 
-Crie um arquivo `.env` na raiz do projeto:
+Create a `.env` file in the project root:
 
 ```bash
 # .env
@@ -390,77 +384,77 @@ OPENAI_API_KEY=sk-...
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### 2. Testar Instalação
+### 2. Test Installation
 
-#### Teste Básico Python
+#### Basic Python Test
 
 ```bash
-# Ativar ambiente virtual primeiro
+# Activate virtual environment first
 # Windows: .\venv\Scripts\Activate.ps1
 # Linux/Mac: source venv/bin/activate
 
 python scripts/batch_extract.py --help
 ```
 
-#### Teste Backend
+#### Backend Test
 
 ```bash
-# Ativar ambiente virtual (se necessário)
+# Activate virtual environment (if needed)
 # Windows: .\venv\Scripts\Activate.ps1
 # Linux/Mac: source venv/bin/activate
 
-# No diretório raiz do projeto
+# In the project root directory
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
-# ou
+# or
 python -m backend.src.main
 ```
 
-Acesse `http://localhost:8000/docs` para ver a documentação da API.
+Access `http://localhost:8000/docs` to see the API documentation.
 
-#### Teste Frontend
+#### Frontend Test
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Acesse `http://localhost:3000` no navegador.
+Access `http://localhost:3000` in your browser.
 
 ---
 
-## Scripts de Setup Automatizados
+## Automated Setup Scripts
 
 ### Windows
 
 ```powershell
-# Executar script de setup
+# Run setup script
 .\scripts\check_setup.ps1
 ```
 
 ### Linux/Mac
 
 ```bash
-# Criar script de setup (se necessário)
+# Create setup script (if needed)
 chmod +x scripts/check_setup.sh
 ./scripts/check_setup.sh
 ```
 
 ---
 
-## Solução de Problemas
+## Troubleshooting
 
-### Python não encontrado
+### Python not found
 
 **Windows:**
-- Verifique se Python está no PATH
-- Reinicie o terminal após instalar
-- Use `py` ao invés de `python` se necessário
+- Check if Python is in PATH
+- Restart terminal after installing
+- Use `py` instead of `python` if necessary
 
 **Linux/Mac:**
-- Use `python3.11` explicitamente
-- Verifique com `which python3.11`
+- Use `python3.11` explicitly
+- Verify with `which python3.11`
 
-### pip não encontrado
+### pip not found
 
 ```bash
 # Windows
@@ -470,10 +464,10 @@ python -m ensurepip --upgrade
 python3.11 -m ensurepip --upgrade
 ```
 
-### Erros de compilação (Linux/Mac)
+### Compilation errors (Linux/Mac)
 
 ```bash
-# Instalar dependências de desenvolvimento
+# Install development dependencies
 # Ubuntu/Debian
 sudo apt install -y build-essential python3-dev
 
@@ -481,44 +475,43 @@ sudo apt install -y build-essential python3-dev
 xcode-select --install
 ```
 
-### Node.js não encontrado
+### Node.js not found
 
 **Windows:**
-- Reinicie o terminal após instalar
-- Verifique PATH em variáveis de ambiente
+- Restart terminal after installing
+- Check PATH in environment variables
 
 **Linux/Mac:**
-- Use `nvm` para gerenciar versões
-- Verifique com `which node`
+- Use `nvm` to manage versions
+- Verify with `which node`
 
-### Erros de permissão (Linux/Mac)
+### Permission errors (Linux/Mac)
 
 ```bash
-# Não use sudo com pip/npm quando em ambiente virtual
-# Se necessário, ajuste permissões:
+# Don't use sudo with pip/npm when in virtual environment
+# If needed, adjust permissions:
 sudo chown -R $USER:$USER ~/.npm
 ```
 
-### Porta já em uso
+### Port already in use
 
 ```bash
-# Backend - usar outra porta (no diretório raiz do projeto)
+# Backend - use another port (in project root directory)
 uvicorn backend.src.main:app --port 8001
 
-# Frontend - usar outra porta
+# Frontend - use another port
 cd frontend
 npm run dev -- -p 3001
 ```
 
 ---
 
-## Próximos Passos
+## Next Steps
 
-Após a instalação bem-sucedida:
+After successful installation:
 
-1. Leia o [README.md](README.md) para entender como usar o sistema
-2. Consulte a seção "Como Utilizar a Solução" no README
-3. Teste com os PDFs de exemplo em `data/samples/`
-4. Configure sua `OPENAI_API_KEY` se quiser usar LLM fallback
+1. Read the [README.md](README.md) to understand how to use the system
+2. Consult the "How to Use the Solution" section in the README
+3. Test with sample PDFs in `data/samples/`
+4. Configure your `OPENAI_API_KEY` if you want to use LLM fallback
 5. 
-

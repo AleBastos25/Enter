@@ -125,7 +125,7 @@ export function Sidebar({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nova Sessão
+          New Session
         </button>
 
         {/* Busca */}
@@ -134,7 +134,7 @@ export function Sidebar({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar sessões..."
+            placeholder="Search sessions..."
             className="w-full px-3 py-2 bg-[#2a2a2a] border border-[#404040] rounded-md text-sm text-white placeholder-[#9ca3af] focus:outline-none focus:border-[#FF6B00]"
           />
           <svg className="w-4 h-4 absolute right-3 top-2.5 text-[#9ca3af]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,7 +155,7 @@ export function Sidebar({
                 : "text-[#9ca3af] hover:text-white"
             }`}
           >
-            Sessões
+            Sessions
           </button>
           <button
             onClick={() => onViewModeChange("folders")}
@@ -172,7 +172,7 @@ export function Sidebar({
         {viewMode === "pages" ? (
           <div className="space-y-1">
             {filteredPages.length === 0 ? (
-              <p className="text-xs text-[#9ca3af] p-2 text-center">Nenhuma sessão encontrada</p>
+              <p className="text-xs text-[#9ca3af] p-2 text-center">No sessions found</p>
             ) : (
               filteredPages.map((page) => (
                 <div
@@ -227,7 +227,7 @@ export function Sidebar({
         ) : (
           <div className="space-y-2">
             {Object.keys(pagesByLabel).length === 0 ? (
-              <p className="text-xs text-[#9ca3af] p-2 text-center">Nenhuma label encontrada</p>
+              <p className="text-xs text-[#9ca3af] p-2 text-center">No labels found</p>
             ) : (
               Object.entries(pagesByLabel).map(([label, labelPages]) => (
                 <div key={label}>

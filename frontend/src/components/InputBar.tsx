@@ -94,7 +94,7 @@ export function InputBar({
           
           // Validar estrutura da lista
           if (parsed.length === 0) {
-            alert("Erro: A lista está vazia.");
+            alert("Error: The list is empty.");
             return;
           }
           
@@ -109,7 +109,7 @@ export function InputBar({
           );
           
           if (validItems.length === 0) {
-            alert("Erro: A lista não contém itens válidos. Cada item deve ter: label, extraction_schema, pdf_path");
+            alert("Error: The list doesn't contain valid items. Each item must have: label, extraction_schema, pdf_path");
             return;
           }
           
@@ -129,7 +129,7 @@ export function InputBar({
         
         // CASO 2: É um objeto simples (modo single)
         if (typeof parsed !== "object" || parsed === null) {
-          alert("Erro: O schema deve ser um objeto JSON válido ou uma lista.");
+          alert("Error: The schema must be a valid JSON object or a list.");
           return;
         }
         
@@ -157,7 +157,7 @@ export function InputBar({
         setSchemaEditorText(JSON.stringify(parsed, null, 2));
       } catch (err) {
         console.error("[InputBar] Erro ao processar schema:", err);
-        alert("Erro ao ler arquivo de schema. Certifique-se de que é um JSON válido.");
+        alert("Error reading schema file. Make sure it's a valid JSON.");
       }
     }
   };
@@ -177,10 +177,10 @@ export function InputBar({
     if (files) {
       const pdfs = Array.from(files).filter((f) => f.type === "application/pdf");
       if (pdfs.length !== files.length) {
-        alert("Apenas arquivos PDF são permitidos.");
+        alert("Only PDF files are allowed.");
       }
       if (pdfs.length + pdfFiles.length > 10) {
-        alert("Máximo de 10 PDFs permitidos.");
+        alert("Maximum of 10 PDFs allowed.");
         return;
       }
       setPdfFiles((prev) => [...prev, ...pdfs]);
@@ -259,7 +259,7 @@ export function InputBar({
     try {
       const parsed = JSON.parse(schemaEditorText);
       if (typeof parsed !== "object" || Array.isArray(parsed)) {
-        alert("Schema deve ser um objeto JSON, não uma lista.");
+        alert("Schema must be a JSON object, not a list.");
         return;
       }
       setSchema(parsed);
@@ -267,7 +267,7 @@ export function InputBar({
       setSchemaJsonString(schemaEditorText);
       setShowSchemaEditor(false);
     } catch (err) {
-      alert("JSON inválido. Verifique a sintaxe.");
+        alert("Invalid JSON. Check the syntax.");
     }
   };
 
@@ -281,7 +281,7 @@ export function InputBar({
     
     if (pdfFiles.length === 0) {
       console.warn("[InputBar] Validação falhou - nenhum PDF");
-      alert("Adicione pelo menos 1 PDF.");
+      alert("Add at least 1 PDF.");
       return;
     }
     
@@ -322,9 +322,9 @@ export function InputBar({
         const unmatchedNames = unmatchedPdfs.map(f => f.name).join(', ');
         const availablePaths = datasetItems.map(item => item.pdf_path).join(', ');
         const shouldContinue = confirm(
-          `Os seguintes PDFs não têm correspondência no dataset:\n${unmatchedNames}\n\n` +
-          `PDFs disponíveis no dataset:\n${availablePaths}\n\n` +
-          `Deseja continuar apenas com os PDFs que têm match?`
+          `The following PDFs don't have a match in the dataset:\n${unmatchedNames}\n\n` +
+          `PDFs available in the dataset:\n${availablePaths}\n\n` +
+          `Do you want to continue only with PDFs that have a match?`
         );
         
         if (!shouldContinue) {
@@ -333,7 +333,7 @@ export function InputBar({
       }
       
       if (matchedPairs.length === 0) {
-        alert("Nenhum PDF correspondeu a nenhum item do dataset. Verifique os nomes dos arquivos.");
+        alert("No PDF matched any item in the dataset. Check the file names.");
         return;
       }
       
@@ -387,7 +387,7 @@ export function InputBar({
     // Caso normal: schema único para todos os PDFs
     if (!label.trim() || !schema) {
       console.warn("[InputBar] Validação falhou - label ou schema vazio");
-      alert("Preencha label e schema, ou carregue um dataset.json.");
+      alert("Fill in label and schema, or load a dataset.json.");
       return;
     }
     
@@ -454,7 +454,7 @@ export function InputBar({
       });
       return {
         pdf,
-        label: matchedItem?.label || "Sem label",
+                        label: matchedItem?.label || "No label",
         matched: !!matchedItem
       };
     });
@@ -492,7 +492,7 @@ export function InputBar({
                 <div className="flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-[#e5e5e5] truncate">
-                      {schemaFile ? schemaFile.name : "Schema manual"}
+                      {schemaFile ? schemaFile.name : "Manual schema"}
                     </span>
                     <div className="flex gap-1">
                       <button
@@ -501,7 +501,7 @@ export function InputBar({
                           handleEditSchema();
                         }}
                         className="text-[#FF6B00] hover:text-[#FF7A00] p-1"
-                        title="Editar JSON"
+                        title="Edit JSON"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -515,7 +515,7 @@ export function InputBar({
                           setDatasetItems(null);
                         }}
                         className="text-[#ff4444] hover:text-[#ff6666] p-1"
-                        title="Remover"
+                        title="Remove"
                       >
                         ×
                       </button>
@@ -542,7 +542,7 @@ export function InputBar({
                     </select>
                   ) : (
                     <div className="text-xs text-[#9ca3af] mt-2">
-                      {Object.keys(schema).length} campo(s)
+                      {Object.keys(schema).length} field(s)
                     </div>
                   )}
                 </div>
@@ -552,7 +552,7 @@ export function InputBar({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                   <p className="text-xs text-[#9ca3af] mb-2">
-                    Arraste ou clique para selecionar
+                    Drag or click to select
                   </p>
                   <button
                     onClick={(e) => {
@@ -561,7 +561,7 @@ export function InputBar({
                     }}
                     className="text-xs text-[#FF6B00] hover:text-[#FF7A00] underline"
                   >
-                    Escrever manualmente
+                    Write manually
                   </button>
                 </div>
               )}
@@ -596,11 +596,11 @@ export function InputBar({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                   <p className="text-xs text-[#9ca3af] mb-2">
-                    Arraste ou clique para selecionar
+                    Drag or click to select
                   </p>
-                  {mode === "multi" && (
-                    <p className="text-xs text-[#9ca3af]">Máximo 10 PDFs</p>
-                  )}
+                    {mode === "multi" && (
+                      <p className="text-xs text-[#9ca3af]">Maximum 10 PDFs</p>
+                    )}
                 </div>
               ) : (
                 <div className="grid grid-cols-5 gap-1.5 h-full overflow-y-auto">
@@ -617,7 +617,7 @@ export function InputBar({
                       <button
                         onClick={() => removePdfFile(idx)}
                         className="absolute top-0 right-0 w-4 h-4 bg-[#ff4444] text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Remover"
+                        title="Remove"
                       >
                         ×
                       </button>
@@ -638,7 +638,7 @@ export function InputBar({
                   type="text"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Digite uma label"
+                  placeholder="Enter a label"
                   className="w-full px-2.5 py-1.5 bg-transparent text-white placeholder-[#9ca3af] focus:outline-none border-none"
                   list="label-suggestions"
                 />
@@ -682,8 +682,8 @@ export function InputBar({
                   <div className="flex items-center justify-center text-center h-full">
                     <p className="text-xs text-[#9ca3af]">
                       {datasetItems 
-                        ? "Adicione PDFs para ver suas labels"
-                        : "Carregue um dataset.json para ver labels"}
+                        ? "Add PDFs to see their labels"
+                        : "Load a dataset.json to see labels"}
                     </p>
                   </div>
                 )}
@@ -709,14 +709,14 @@ export function InputBar({
                 
                 if (!canSend) {
                   const reasons = [];
-                  if (pdfFiles.length === 0) reasons.push("Nenhum PDF adicionado");
+                  if (pdfFiles.length === 0) reasons.push("No PDF added");
                   if (!datasetItems && (!label.trim() || !schema)) {
-                    if (!label.trim()) reasons.push("Label vazio");
-                    if (!schema) reasons.push("Schema não definido");
+                    if (!label.trim()) reasons.push("Empty label");
+                    if (!schema) reasons.push("Schema not defined");
                   }
-                  if (disabled) reasons.push("Processando (desabilitado)");
+                  if (disabled) reasons.push("Processing (disabled)");
                   
-                  alert(`Não é possível enviar:\n${reasons.join("\n")}`);
+                  alert(`Cannot send:\n${reasons.join("\n")}`);
                   return;
                 }
                 
@@ -737,7 +737,7 @@ export function InputBar({
                   ? "bg-[#FF6B00] hover:bg-[#FF7A00] text-white cursor-pointer hover:scale-110"
                   : "bg-[#FF6B00] text-white cursor-not-allowed opacity-50"
               }`}
-              title={disabled ? "Processando..." : "Enviar"}
+              title={disabled ? "Processing..." : "Send"}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -751,7 +751,7 @@ export function InputBar({
       {showSchemaEditor && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-[#171717] border border-[#404040] rounded-lg p-6 w-[90vw] max-w-5xl h-[85vh] flex flex-col">
-            <h2 className="text-xl font-bold mb-4 text-white">Editar Schema JSON</h2>
+            <h2 className="text-xl font-bold mb-4 text-white">Edit Schema JSON</h2>
             <textarea
               value={schemaEditorText}
               onChange={(e) => setSchemaEditorText(e.target.value)}
@@ -763,13 +763,13 @@ export function InputBar({
                 onClick={handleSaveSchemaEdit}
                 className="px-4 py-2 bg-[#FF6B00] hover:bg-[#FF7A00] text-white rounded-lg"
               >
-                Salvar
+                Save
               </button>
               <button
                 onClick={() => setShowSchemaEditor(false)}
                 className="px-4 py-2 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded-lg"
               >
-                Cancelar
+                Cancel
               </button>
             </div>
           </div>

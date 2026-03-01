@@ -1,22 +1,22 @@
 # Graph-based Schema Extractor
 
-Sistema de extração de schema baseado em grafo hierárquico de tokens. Utiliza uma cascata de estratégias de matching para encontrar valores correspondentes a cada campo do schema de extração.
+Schema extraction system based on hierarchical token graph. Uses a cascade of matching strategies to find values corresponding to each field in the extraction schema.
 
-## Características
+## Features
 
-- **Grafo hierárquico**: Constrói grafo de tokens com relações espaciais (edges ortogonais)
-- **Cascata de matching**: Pattern → Regex → Embeddings → Tiebreaking
-- **Hints/Patterns**: Sistema de dicas para identificar tipos específicos (data, dinheiro, endereço, etc.)
-- **Embeddings semânticos**: Usa FastEmbed para matching semântico
-- **Tiebreaking inteligente**: Heurísticas + LLM para desempatar entre candidatos
-- **Gerenciamento de nós**: Evita reutilização de nós já extraídos
+- **Hierarchical graph**: Builds token graph with spatial relationships (orthogonal edges)
+- **Matching cascade**: Pattern → Regex → Embeddings → Tiebreaking
+- **Hints/Patterns**: Hint system to identify specific types (date, money, address, etc.)
+- **Semantic embeddings**: Uses FastEmbed for semantic matching
+- **Intelligent tiebreaking**: Heuristics + LLM to break ties between candidates
+- **Node management**: Avoids reusing already extracted nodes
 
-## Uso Básico
+## Basic Usage
 
 ```python
 from src.graph_extractor import GraphSchemaExtractor
 
-# Inicializar extrator
+# Initialize extractor
 extractor = GraphSchemaExtractor(
     embedding_model="BAAI/bge-small-en-v1.5",
     min_embedding_similarity=0.3,
@@ -25,67 +25,67 @@ extractor = GraphSchemaExtractor(
     use_llm_tiebreaker=True
 )
 
-# Definir schema
+# Define schema
 schema = {
     "nome": "Nome do profissional",
     "inscricao": "Número de inscrição do profissional",
     "seccional": "Seccional do profissional",
 }
 
-# Extrair informações
+# Extract information
 result = extractor.extract(
     label="carteira_oab",
     extraction_schema=schema,
     pdf_path="data/samples/oab_1.pdf"
 )
 
-# Acessar resultados
+# Access results
 print(result["fields"])
 print(result["metadata"])
 ```
 
-## Arquitetura
+## Architecture
 
-### Cascata de Matching
+### Matching Cascade
 
 1. **Pattern Matching (Hints)**
-   - Aplica hints relevantes para o campo
-   - Detecta padrões (data, dinheiro, CPF/CNPJ, telefone, endereço, texto)
-   - Score baseado em match perfeito/parcial
+   - Applies relevant hints for the field
+   - Detects patterns (date, money, CPF/CNPJ, phone, address, text)
+   - Score based on perfect/partial match
 
 2. **Regex Matching**
-   - Normalização de texto (remove acentos, lowercase)
-   - Match perfeito: nome do campo encontrado no token
-   - Match por regex: usa patterns das hints
-   - Match parcial: palavras-chave encontradas
+   - Text normalization (removes accents, lowercase)
+   - Perfect match: field name found in token
+   - Regex match: uses patterns from hints
+   - Partial match: keywords found
 
 3. **Embedding Matching**
-   - Gera embeddings usando FastEmbed
-   - Calcula similaridade de cosseno entre descrição do campo e tokens
-   - Compara com LABEL+VALUE combinado ou apenas VALUE
+   - Generates embeddings using FastEmbed
+   - Calculates cosine similarity between field description and tokens
+   - Compares with combined LABEL+VALUE or just VALUE
 
 4. **Tiebreaking**
-   - **Heurísticas**: Tipo de token, ordem no documento, tamanho do texto, distância LABEL-VALUE
-   - **LLM**: Usado quando heurísticas não resolvem (GPT-5-mini por padrão)
+   - **Heuristics**: Token type, document order, text size, LABEL-VALUE distance
+   - **LLM**: Used when heuristics don't resolve (GPT-5-mini by default)
 
-### Sistema de Hints
+### Hint System
 
-Hints pré-definidas para identificar padrões específicos:
+Pre-defined hints to identify specific patterns:
 
-- **DateHint**: Detecta datas em vários formatos
-- **MoneyHint**: Detecta valores monetários (R$, $, €, etc.)
-- **CPFCNPJHint**: Detecta CPF/CNPJ
-- **PhoneHint**: Detecta números de telefone
-- **AddressHint**: Detecta endereços e agrega múltiplos VALUEs
-- **TextHint**: Fallback para texto genérico
+- **DateHint**: Detects dates in various formats
+- **MoneyHint**: Detects monetary values (R$, $, €, etc.)
+- **CPFCNPJHint**: Detects CPF/CNPJ
+- **PhoneHint**: Detects phone numbers
+- **AddressHint**: Detects addresses and aggregates multiple VALUEs
+- **TextHint**: Fallback for generic text
 
-### Gerenciamento de Nós
+### Node Management
 
-- Rastreia nós já usados para evitar duplicação
-- Suporta reutilização parcial (ex: "R$ 1.000,00 - R$ 2.000,00")
-- Marca nós como usados após extração
+- Tracks already used nodes to avoid duplication
+- Supports partial reuse (e.g., "R$ 1.000,00 - R$ 2.000,00")
+- Marks nodes as used after extraction
 
-## Formato de Saída
+## Output Format
 
 ```json
 {
@@ -111,54 +111,53 @@ Hints pré-definidas para identificar padrões específicos:
 }
 ```
 
-## Estratégias de Matching
+## Matching Strategies
 
-- `pattern_perfect`: Match perfeito via hints
-- `pattern_perfect_tiebreak`: Múltiplos matches perfeitos, desempate necessário
-- `regex_perfect`: Match perfeito via regex
-- `regex_perfect_tiebreak`: Múltiplos matches perfeitos, desempate necessário
-- `regex_partial`: Match parcial via regex
-- `embedding`: Match por similaridade semântica
-- `embedding_tiebreak`: Match por embeddings com desempate
-- `none`: Nenhum match encontrado
+- `pattern_perfect`: Perfect match via hints
+- `pattern_perfect_tiebreak`: Multiple perfect matches, tiebreaking needed
+- `regex_perfect`: Perfect match via regex
+- `regex_perfect_tiebreak`: Multiple perfect matches, tiebreaking needed
+- `regex_partial`: Partial match via regex
+- `embedding`: Match by semantic similarity
+- `embedding_tiebreak`: Match by embeddings with tiebreaking
+- `none`: No match found
 
-## Dependências
+## Dependencies
 
-- `fastembed>=0.2.0`: Para embeddings semânticos rápidos
-- `openai>=1.0.0`: Para LLM tiebreaker (opcional)
-- `numpy>=1.20.0`: Para cálculos de similaridade
-- Componentes do `graph_builder`: TokenExtractor, GraphBuilder, RoleClassifier
+- `fastembed>=0.2.0`: For fast semantic embeddings
+- `openai>=1.0.0`: For LLM tiebreaker (optional)
+- `numpy>=1.20.0`: For similarity calculations
+- Components from `graph_builder`: TokenExtractor, GraphBuilder, RoleClassifier
 
-## Configuração
+## Configuration
 
-### Parâmetros do Extrator
+### Extractor Parameters
 
-- `embedding_model`: Modelo FastEmbed (default: "BAAI/bge-small-en-v1.5")
-- `min_embedding_similarity`: Similaridade mínima para embeddings (0.0 a 1.0, default: 0.3)
-- `tiebreak_threshold`: Threshold para considerar empate (default: 0.05)
-- `llm_model`: Modelo LLM para tiebreaker (default: "gpt-5-mini")
-- `use_llm_tiebreaker`: Se True, usa LLM quando heurísticas não resolvem (default: True)
+- `embedding_model`: FastEmbed model (default: "BAAI/bge-small-en-v1.5")
+- `min_embedding_similarity`: Minimum similarity for embeddings (0.0 to 1.0, default: 0.3)
+- `tiebreak_threshold`: Threshold to consider tie (default: 0.05)
+- `llm_model`: LLM model for tiebreaker (default: "gpt-5-mini")
+- `use_llm_tiebreaker`: If True, uses LLM when heuristics don't resolve (default: True)
 
 ### API Key (LLM Tiebreaker)
 
-Configure a API key do OpenAI:
+Configure the OpenAI API key:
 
 ```bash
-# Variável de ambiente
+# Environment variable
 export OPENAI_API_KEY=sk-...
 
-# Ou em configs/secrets.yaml
+# Or in configs/secrets.yaml
 OPENAI_API_KEY: sk-...
 ```
 
-## Limitações
+## Limitations
 
-- PDFs devem ter OCR feito (texto embutido)
-- Processa apenas primeira página do PDF
-- Performance depende do número de nós no grafo
-- LLM tiebreaker adiciona custo e latência
+- PDFs must have OCR done (embedded text)
+- Processes only first page of PDF
+- Performance depends on number of nodes in graph
+- LLM tiebreaker adds cost and latency
 
-## Exemplo Completo
+## Complete Example
 
-Ver `test_graph_extractor.py` para exemplo completo de uso.
-
+See `test_graph_extractor.py` for a complete usage example.

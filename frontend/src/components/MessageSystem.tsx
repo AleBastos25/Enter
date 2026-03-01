@@ -14,13 +14,13 @@ interface MessageSystemProps {
 }
 
 const stepLabels: Record<ExtractionStep, string> = {
-  received: "Recebido",
-  building_graph: "Construindo grafo",
-  regex_matching: "Regras & Regex",
+  received: "Received",
+  building_graph: "Building graph",
+  regex_matching: "Rules & Regex",
   embedding_matching: "Embeddings & ranking",
-  tiebreaking: "Desempate/Arbitragem",
-  post_processing: "Pós-processamento",
-  done: "JSON gerado",
+  tiebreaking: "Tiebreaking/Arbitration",
+  post_processing: "Post-processing",
+  done: "JSON generated",
 };
 
 export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps) {
@@ -67,17 +67,17 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
     return (
       <div className="flex justify-start mb-4">
         <div className="bg-[#2a1f1f] border border-[#ff4444] rounded-lg p-4 max-w-2xl animate-fade-in">
-          <div className="font-semibold mb-2 text-white">Erro ao processar {run.filename}</div>
+          <div className="font-semibold mb-2 text-white">Error processing {run.filename}</div>
           <div className="mb-2 text-[#ff8888]">{run.error_message}</div>
           {devMode && (
             <div className="mt-2 text-sm text-[#9ca3af] border-t border-[#404040] pt-2">
               {run.dev ? (
                 <>
                   {run.dev.elapsed_ms !== undefined && (
-                    <div>Tempo: <span className="text-[#FF6B00]">{run.dev.elapsed_ms} ms</span></div>
+                    <div>Time: <span className="text-[#FF6B00]">{run.dev.elapsed_ms} ms</span></div>
                   )}
                   {run.dev.rules_used && run.dev.rules_used.length > 0 && (
-                    <div>Regras: <span className="text-[#e5e5e5]">{run.dev.rules_used.join(", ")}</span></div>
+                    <div>Rules: <span className="text-[#e5e5e5]">{run.dev.rules_used.join(", ")}</span></div>
                   )}
                   {(run.dev.graph_url || run.run_id) && (
                     <div>
@@ -91,13 +91,13 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
                         }}
                         className="text-[#FF6B00] hover:text-[#FF7A00] underline cursor-pointer bg-transparent border-none p-0"
                       >
-                        Abrir Grafo HTML →
+                        Open Graph HTML →
                       </button>
                     </div>
                   )}
                 </>
               ) : (
-                <div className="text-[#9ca3af] italic">Dados de dev não disponíveis</div>
+                <div className="text-[#9ca3af] italic">Dev data not available</div>
               )}
             </div>
           )}
@@ -116,7 +116,7 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
               onClick={onRetry}
               className="mt-2 px-3 py-1 bg-[#ff4444] hover:bg-[#ff6666] text-white rounded text-sm transition-colors"
             >
-              Tentar Novamente
+              Try Again
             </button>
           )}
         </div>
@@ -138,7 +138,7 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
               onClick={handleCopy}
               className="absolute top-2 right-2 px-2 py-1 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded text-xs transition-colors"
             >
-              {copied ? "Copiado!" : "Copiar"}
+              {copied ? "Copied!" : "Copy"}
             </button>
           </div>
         </div>
@@ -179,7 +179,7 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
                 )}
               </>
             ) : (
-              <div className="text-[#9ca3af] italic">Dados de dev não disponíveis</div>
+              <div className="text-[#9ca3af] italic">Dev data not available</div>
             )}
           </div>
         )}
@@ -203,7 +203,7 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
                 onClick={handleCopy}
                 className="absolute top-2 right-2 px-2 py-1 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded text-xs transition-colors"
               >
-                {copied ? "Copiado!" : "Copiar"}
+                {copied ? "Copied!" : "Copy"}
               </button>
             </div>
             <div className="flex gap-2">
@@ -211,13 +211,13 @@ export function MessageSystem({ message, devMode, onRetry }: MessageSystemProps)
                 onClick={handleCopy}
                 className="px-3 py-1.5 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded text-sm transition-colors"
               >
-                {copied ? "✓ Copiado" : "Copiar"}
+                {copied ? "✓ Copied" : "Copy"}
               </button>
               <button
                 onClick={handleDownload}
                 className="px-3 py-1.5 bg-[#FF6B00] hover:bg-[#FF7A00] text-white rounded text-sm transition-colors"
               >
-                Baixar JSON
+                Download JSON
               </button>
             </div>
           </>

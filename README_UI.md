@@ -1,142 +1,141 @@
-# UI Graph Extractor - Documentação
+# UI Graph Extractor - Documentation
 
-Interface completa para extração de dados de PDFs usando Graph Extractor.
+Complete interface for extracting data from PDFs using Graph Extractor.
 
-## Estrutura
+## Structure
 
-- **Backend**: FastAPI em `backend/`
-- **Frontend**: Next.js/React em `frontend/`
+- **Backend**: FastAPI in `backend/`
+- **Frontend**: Next.js/React in `frontend/`
 
-## Pré-requisitos
+## Prerequisites
 
-- **Python 3.10+** (para o backend)
-- **Node.js 18+** e **npm** (para o frontend)
+- **Python 3.10+** (for backend)
+- **Node.js 18+** and **npm** (for frontend)
 
-> ⚠️ **Importante**: Se você receber erro "npm não é reconhecido", precisa instalar o Node.js primeiro.
-> Veja [INSTALLATION.md](INSTALLATION.md) ou [frontend/SETUP.md](frontend/SETUP.md) para instruções detalhadas.
+> ⚠️ **Important**: If you get an error "npm is not recognized", you need to install Node.js first.
+> See [INSTALLATION.md](INSTALLATION.md) or [frontend/SETUP.md](frontend/SETUP.md) for detailed instructions.
 
-## 🚀 Início Rápido
+## 🚀 Quick Start
 
-**Método mais fácil**: Execute `start-ui.bat` (duplo clique) ou `.\start-ui.ps1` no PowerShell.
+**Easiest method**: Run `start-ui.bat` (double-click) or `.\start-ui.ps1` in PowerShell.
 
-O script automaticamente:
-- Configura o Node.js
-- Inicia o backend
-- Inicia o frontend  
-- Abre o navegador
+The script automatically:
+- Configures Node.js
+- Starts the backend
+- Starts the frontend  
+- Opens the browser
 
-Veja [START_UI.md](START_UI.md) para mais detalhes.
+See [START_UI.md](START_UI.md) for more details.
 
-## Instalação e Execução Manual
+## Manual Installation and Execution
 
-### 1. Instalar Node.js (se ainda não tiver)
+### 1. Install Node.js (if you don't have it yet)
 
 **Windows:**
-- Baixe de: https://nodejs.org/ (versão LTS)
-- Opção A: Execute o instalador `.msi` (recomendado - adiciona ao PATH automaticamente)
-- Opção B: Extraia o zip e adicione ao PATH manualmente
+- Download from: https://nodejs.org/ (LTS version)
+- Option A: Run the `.msi` installer (recommended - adds to PATH automatically)
+- Option B: Extract the zip and add to PATH manually
 
-**Se você já baixou o Node.js (ex: `C:\Users\aleba\Downloads\node-v24.11.0-win-x64`):**
+**If you already downloaded Node.js (e.g., `C:\Users\aleba\Downloads\node-v24.11.0-win-x64`):**
 ```powershell
-# Execute o script de configuração
+# Run the setup script
 .\setup_node_path.ps1
 
-# Ou adicione manualmente ao PATH:
+# Or add manually to PATH:
 [Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));C:\Users\aleba\Downloads\node-v24.11.0-win-x64", "User")
 ```
 
-Reinicie o terminal e verifique: `node --version` e `npm --version`
+Restart terminal and verify: `node --version` and `npm --version`
 
 ### 2. Backend
 
 ```bash
-# No diretório raiz do projeto
-# Instalar dependências (se ainda não instalou)
+# In the project root directory
+# Install dependencies (if not already installed)
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 
-# Executar servidor
+# Run server
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
-# ou
+# or
 python -m backend.src.main
 ```
 
-O backend estará disponível em `http://localhost:8000`.
+The backend will be available at `http://localhost:8000`.
 
-**Nota para Windows:** Você pode usar o script `start-ui.bat` (duplo clique) ou `.\start-ui.ps1` no PowerShell para iniciar automaticamente o backend e frontend. O script `start-ui.bat` pode ser adaptado para rodar em qualquer máquina Windows.
+**Note for Windows:** You can use the `start-ui.bat` script (double-click) or `.\start-ui.ps1` in PowerShell to automatically start the backend and frontend. The `start-ui.bat` script can be adapted to run on any Windows machine.
 
 ### 3. Frontend
 
 ```bash
-# Instalar dependências (após instalar Node.js)
+# Install dependencies (after installing Node.js)
 cd frontend
 npm install
 
-# Executar em desenvolvimento
+# Run in development
 npm run dev
 ```
 
-O frontend estará disponível em `http://localhost:3000`.
+The frontend will be available at `http://localhost:3000`.
 
-## Funcionalidades Implementadas
+## Implemented Features
 
 ### Backend
 
-- ✅ Endpoint `POST /api/graph-extract` para extração de múltiplos PDFs
-- ✅ Endpoint `GET /graph/{run_id}.html` para visualização de grafos
-- ✅ Suporte a callbacks de progresso no Graph Extractor
-- ✅ Geração de HTML do grafo durante extração (dev mode)
-- ✅ Validação de até 10 PDFs por requisição
-- ✅ Processamento sequencial de PDFs
-- ✅ Extração de regras usadas do metadata
+- ✅ `POST /api/graph-extract` endpoint for extracting multiple PDFs
+- ✅ `GET /graph/{run_id}.html` endpoint for graph visualization
+- ✅ Support for progress callbacks in Graph Extractor
+- ✅ Graph HTML generation during extraction (dev mode)
+- ✅ Validation of up to 10 PDFs per request
+- ✅ Sequential PDF processing
+- ✅ Extraction of used rules from metadata
 
 ### Frontend
 
-- ✅ Interface estilo ChatGPT
-- ✅ Upload de schema JSON (arquivo ou manual)
-- ✅ Drag & Drop de PDFs (até 10)
-- ✅ Autocomplete de labels recentes
-- ✅ Visualização de resultados em tempo real
-- ✅ Modo dev com visualização de grafos, tempo e regras
-- ✅ Sidebar com páginas e busca
-- ✅ Organização por pastas (labels)
-- ✅ Persistência em sessionStorage
-- ✅ Botões Copiar e Baixar JSON
-- ✅ Retry por run (estrutura pronta)
+- ✅ ChatGPT-style interface
+- ✅ JSON schema upload (file or manual)
+- ✅ PDF Drag & Drop (up to 10)
+- ✅ Recent labels autocomplete
+- ✅ Real-time result visualization
+- ✅ Dev mode with graph visualization, time and rules
+- ✅ Sidebar with pages and search
+- ✅ Organization by folders (labels)
+- ✅ Session persistence (sessionStorage)
+- ✅ Copy and Download JSON buttons
+- ✅ Retry per run (structure ready)
 
-## Uso
+## Usage
 
-1. **Iniciar Backend**: Execute o servidor FastAPI na porta 8000
-2. **Iniciar Frontend**: Execute o servidor Next.js na porta 3000
-3. **Acessar UI**: Abra `http://localhost:3000` no navegador
-4. **Extrair Dados**:
-   - Digite um label
-   - Faça upload de um schema JSON ou escreva manualmente
-   - Adicione PDFs (drag & drop ou seleção)
-   - Clique em "Enviar"
-   - Aguarde o processamento sequencial
-   - Visualize os resultados
+1. **Start Backend**: Run the FastAPI server on port 8000
+2. **Start Frontend**: Run the Next.js server on port 3000
+3. **Access UI**: Open `http://localhost:3000` in your browser
+4. **Extract Data**:
+   - Enter a label
+   - Upload a JSON schema or write manually
+   - Add PDFs (drag & drop or selection)
+   - Click "Send"
+   - Wait for sequential processing
+   - View results
 
-## Modo Dev
+## Dev Mode
 
-Ative o toggle "Dev Mode" no header para:
-- Ver tempo de processamento
-- Ver regras/estratégias usadas
-- Acessar link "Abrir Grafo" para visualização HTML do grafo
+Activate the "Dev Mode" toggle in the header to:
+- See processing time
+- See rules/strategies used
+- Access "Open Graph" link for HTML graph visualization
 
-## Notas
+## Notes
 
-- Persistência é apenas em sessão (perde ao fechar a aba)
-- Dev mode persiste em localStorage
-- HTMLs do grafo são gerados apenas em dev mode
-- Processamento é sequencial (um PDF por vez)
+- Persistence is only in session (lost when closing tab)
+- Dev mode persists in localStorage
+- Graph HTMLs are generated only in dev mode
+- Processing is sequential (one PDF at a time)
 
-## Próximos Passos (Opcional)
+## Next Steps (Optional)
 
-- [ ] Implementar streaming real-time com SSE
-- [ ] Adicionar export ZIP de inputs/outputs
-- [ ] Melhorar tratamento de erros
-- [ ] Adicionar validação de schema mais robusta
-- [ ] Implementar retry completo
-- [ ] Adicionar loading states mais detalhados
-
+- [ ] Implement real-time streaming with SSE
+- [ ] Add ZIP export of inputs/outputs
+- [ ] Improve error handling
+- [ ] Add more robust schema validation
+- [ ] Implement complete retry
+- [ ] Add more detailed loading states

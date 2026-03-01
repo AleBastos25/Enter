@@ -36,7 +36,7 @@ export function MessageUser({ message }: MessageUserProps) {
               onClick={handleCopy}
               className="absolute top-2 right-2 px-2 py-1 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded text-xs transition-colors"
             >
-              {copied ? "Copiado!" : "Copiar"}
+              {copied ? "Copied!" : "Copy"}
             </button>
           </div>
         </div>

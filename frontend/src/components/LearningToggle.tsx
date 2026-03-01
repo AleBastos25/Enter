@@ -50,7 +50,7 @@ export function LearningToggle({ value, onChange }: LearningToggleProps) {
             }`}
           />
         </div>
-        <span className="ml-2 text-sm font-medium text-[#e5e5e5]">Aprendizado</span>
+        <span className="ml-2 text-sm font-medium text-[#e5e5e5]">Learning</span>
       </label>
     </div>
   );

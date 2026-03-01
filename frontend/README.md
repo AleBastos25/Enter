@@ -1,46 +1,45 @@
 # Frontend - Graph Extractor UI
 
-Interface React/Next.js para extração de dados de PDFs.
+React/Next.js interface for extracting data from PDFs.
 
-## Instalação
+## Installation
 
 ```bash
 npm install
-# ou
+# or
 yarn install
 ```
 
-## Execução
+## Execution
 
 ```bash
-# Desenvolvimento
+# Development
 npm run dev
 
-# Build de produção
+# Production build
 npm run build
 
-# Executar produção
+# Run production
 npm start
 ```
 
-A aplicação estará disponível em `http://localhost:3000`.
+The application will be available at `http://localhost:3000`.
 
-## Configuração
+## Configuration
 
-Crie um arquivo `.env.local` na raiz do frontend:
+Create a `.env.local` file in the frontend root:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## Funcionalidades
+## Features
 
-- Upload de múltiplos PDFs (até 10)
-- Upload de schema JSON ou escrita manual
-- Extração sequencial de PDFs
-- Visualização de resultados em tempo real
-- Modo dev com visualização de grafos
-- Persistência em sessão (sessionStorage)
-- Busca em páginas
-- Organização por pastas (labels)
-
+- Upload multiple PDFs (up to 10)
+- JSON schema upload or manual writing
+- Sequential PDF extraction
+- Real-time result visualization
+- Dev mode with graph visualization
+- Session persistence (sessionStorage)
+- Page search
+- Organization by folders (labels)

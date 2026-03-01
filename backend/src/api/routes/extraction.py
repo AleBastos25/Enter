@@ -119,7 +119,7 @@ async def extract_graph(
     timestamp = time.time()
     
     debug_print("\n" + "=" * 80)
-    debug_print(f"[API] ═══ ROTA /api/graph-extract CHAMADA ═══")
+    debug_print(f"[API] === ROTA /api/graph-extract CHAMADA ===")
     debug_print(f"[API] Timestamp: {timestamp}")
     debug_print(f"[API] REQUISIÇÃO RECEBIDA: POST /api/graph-extract")
     debug_print(f"[API] Label: {label}")

@@ -1,7 +1,7 @@
 """Modelos Pydantic para a API."""
 
 from typing import Dict, Any, Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RunResult(BaseModel):
@@ -24,8 +24,12 @@ class RunResult(BaseModel):
 class ExtractionRequest(BaseModel):
     """Request de extração (para validação)."""
     label: str
-    schema: Dict[str, str]
+    schema_data: Dict[str, str] = Field(..., alias="schema")
     dev_mode: bool = False
+    
+    class Config:
+        """Configuração do modelo."""
+        populate_by_name = True  # Permite usar tanto 'schema' quanto 'schema_data'
 
 
 class ExtractionResponse(BaseModel):

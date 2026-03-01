@@ -31,7 +31,7 @@ export function Chat({ page, devMode, onRetry }: ChatProps) {
       <div className="flex-1 flex items-center justify-center text-[#9ca3af] bg-[#000000]">
         <div className="text-center">
           <div className="text-2xl font-semibold mb-2 text-white">PDF Extractor</div>
-          <div className="text-sm">Selecione uma sessão ou crie uma nova </div>
+          <div className="text-sm">Select a session or create a new one</div>
         </div>
       </div>
     );
@@ -42,7 +42,7 @@ export function Chat({ page, devMode, onRetry }: ChatProps) {
       <div className="max-w-4xl mx-auto space-y-6">
         {page.messages.length === 0 ? (
           <div className="text-center text-[#9ca3af] py-8">
-            Nenhuma mensagem ainda. Envie um documento para começar.
+            No messages yet. Send a document to get started.
           </div>
         ) : (
           page.messages.map((message) => {

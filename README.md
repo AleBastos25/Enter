@@ -1,192 +1,192 @@
-# Sistema de Extração de Documentos
+# Document Extraction System
 
-Pipeline híbrido layout-first para extração de dados estruturados de PDFs. Extrai informações estruturadas de documentos PDF arbitrários usando uma combinação de análise espacial, detecção de tabelas, matching semântico e fallback opcional com LLM.
+Hybrid layout-first pipeline for extracting structured data from PDFs. Extracts structured information from arbitrary PDF documents using a combination of spatial analysis, table detection, semantic matching and optional LLM fallback.
 
-## Desafios Mapeados e Soluções Propostas
+## Mapped Challenges and Proposed Solutions
 
-### Desafios Identificados
+### Identified Challenges
 
-1. **Extração de dados estruturados de PDFs com layouts variados**
-   - **Problema**: PDFs podem ter layouts muito diferentes (formulários, cartões, telas de sistema, etc.)
-   - **Solução**: Construção de grafo hierarquizado que representa a estrutura espacial do documento, assumindo sentido de leitura convencional da esquerda para direita e de cima para baixo. O grafo utiliza edges ortogonais (horizontais e verticais) para capturar relações espaciais entre elementos, permitindo adaptação a diferentes estruturas sem reconfiguração
+1. **Extracting structured data from PDFs with varied layouts**
+   - **Problem**: PDFs can have very different layouts (forms, cards, system screens, etc.)
+   - **Solution**: Construction of a hierarchical graph that represents the document's spatial structure, assuming conventional reading direction from left to right and top to bottom. The graph uses orthogonal edges (horizontal and vertical) to capture spatial relationships between elements, allowing adaptation to different structures without reconfiguration
 
-2. **Matching de campos quando labels variam**
-   - **Problema**: Labels podem ser escritos de formas diferentes ("Nome", "Nome do profissional", "Nome completo")
-   - **Solução**: Uso de embeddings semânticos (BAAI/bge-small-en-v1.5) para encontrar campos mesmo quando a redação varia
+2. **Field matching when labels vary**
+   - **Problem**: Labels can be written in different ways ("Nome", "Nome do profissional", "Nome completo")
+   - **Solution**: Use of semantic embeddings (BAAI/bge-small-en-v1.5) to find fields even when wording varies
 
-3. **Extração de dados de tabelas**
-   - **Problema**: Dados podem estar em tabelas KV (chave-valor) ou tabelas grid
-   - **Solução**: Detecção automática de tabelas com suporte a ambos os formatos
+3. **Extracting data from tables**
+   - **Problem**: Data can be in KV (key-value) or grid tables
+   - **Solution**: Automatic table detection with support for both formats
 
-4. **Casos ambíguos e edge cases**
-   - **Problema**: Alguns campos podem ser difíceis de extrair com heurísticas
-   - **Solução**: Fallback opcional com LLM (GPT-4o-mini) para casos ambíguos, com controle de orçamento
+4. **Ambiguous cases and edge cases**
+   - **Problem**: Some fields may be difficult to extract with heuristics
+   - **Solution**: Optional LLM fallback (GPT-4o-mini) for ambiguous cases, with budget control
 
-5. **Validação de tipos específicos (CPF, CNPJ, datas, etc.)**
-   - **Problema**: Dados extraídos precisam ser validados e normalizados
-   - **Solução**: Sistema de validadores com 20+ tipos, incluindo tipos brasileiros específicos
+5. **Validation of specific types (CPF, CNPJ, dates, etc.)**
+   - **Problem**: Extracted data needs to be validated and normalized
+   - **Solution**: Validator system with 20+ types, including specific Brazilian types
 
-6. **Performance e custo**
-   - **Problema**: LLM e embeddings podem ser caros e lentos
-   - **Solução**: Abordagem determinística por padrão (heurísticas e tabelas primeiro), usando AI apenas quando necessário
+6. **Performance and cost**
+   - **Problem**: LLM and embeddings can be expensive and slow
+   - **Solution**: Deterministic approach by default (heuristics and tables first), using AI only when necessary
 
-7. **Complexidade arquitetural e múltiplos níveis de abstração**
-   - **Problema**: O problema exige lidar com múltiplos níveis de abstração (tokens, blocos, tabelas, schemas, hints, validadores) e generalidade dos inputs
-   - **Solução**: Uso de programação orientada a objetos com hierarquia de classes bem definida (BaseHint, BaseRule, BaseMatcher, etc.), permitindo extensibilidade e manutenibilidade do código através de abstrações claras
+7. **Architectural complexity and multiple levels of abstraction**
+   - **Problem**: The problem requires dealing with multiple levels of abstraction (tokens, blocks, tables, schemas, hints, validators) and input generality
+   - **Solution**: Use of object-oriented programming with well-defined class hierarchy (BaseHint, BaseRule, BaseMatcher, etc.), allowing code extensibility and maintainability through clear abstractions
 
-### Arquitetura da Solução
+### Solution Architecture
 
-A solução implementa um pipeline híbrido em múltiplas camadas:
+The solution implements a hybrid pipeline in multiple layers:
 
-1. **Análise de Layout**: Constrói grafo hierarquizado com edges ortogonais que representa a estrutura espacial do documento. O grafo é construído assumindo sentido de leitura convencional (esquerda para direita, cima para baixo), criando relações horizontais (east/west) entre tokens na mesma linha e relações verticais (north/south) entre elementos em linhas diferentes. A hierarquia tipográfica é analisada para identificar padrões de formatação (tamanho de fonte, negrito, cor) que indicam estrutura semântica
+1. **Layout Analysis**: Builds a hierarchical graph with orthogonal edges that represents the document's spatial structure. The graph is built assuming conventional reading direction (left to right, top to bottom), creating horizontal relationships (east/west) between tokens on the same line and vertical relationships (north/south) between elements on different lines. Typographic hierarchy is analyzed to identify formatting patterns (font size, bold, color) that indicate semantic structure
 
-2. **Detecção de Tabelas**: Identifica tabelas KV (chave-valor) e grid automaticamente
+2. **Table Detection**: Automatically identifies KV (key-value) and grid tables
 
-3. **Enriquecimento de Schema**: Infere tipos, gera sinônimos, extrai hints (padrões tipográficos e semânticos)
+3. **Schema Enrichment**: Infers types, generates synonyms, extracts hints (typographic and semantic patterns)
 
-4. **Matching Multi-estratégia**: 
-   - Relações espaciais através do grafo (mesma linha, abaixo, mesma coluna)
-   - Lookups em tabelas
-   - Similaridade semântica (embeddings)
-   - Memória de padrões (aprendizado incremental)
+4. **Multi-strategy Matching**: 
+   - Spatial relationships through the graph (same line, below, same column)
+   - Table lookups
+   - Semantic similarity (embeddings)
+   - Pattern memory (incremental learning)
 
-5. **Extração e Validação**: Extrai valores e valida tipos usando hints e validadores
+5. **Extraction and Validation**: Extracts values and validates types using hints and validators
 
-6. **LLM Fallback**: Opcional para casos ambíguos
+6. **LLM Fallback**: Optional for ambiguous cases
 
-7. **Fusão de Resultados**: Combina resultados entre páginas (modo multi-página)
+7. **Result Fusion**: Combines results between pages (multi-page mode)
 
-### Diferenciais da Solução
+### Solution Differentiators
 
-- **Determinístico por padrão**: Heurísticas e tabelas antes de qualquer uso de AI
-- **Custo-efetivo**: LLM usado apenas quando necessário, com controle de orçamento
-- **Adaptável**: Funciona com diferentes tipos de documentos sem reconfiguração
-- **Extensível**: Sistema de validadores e hints facilmente extensível
-- **Performático**: Processamento rápido para documentos simples, com opção de análise mais profunda quando necessário
+- **Deterministic by default**: Heuristics and tables before any use of AI
+- **Cost-effective**: LLM used only when necessary, with budget control
+- **Adaptable**: Works with different document types without reconfiguration
+- **Extensible**: Easily extensible validator and hints system
+- **Performant**: Fast processing for simple documents, with option for deeper analysis when necessary
 
 
 ## Quick Start
 
 ### Installation
 
-##  Aviso 
+## Warning
 
-**Validação de Instalação:**
-- ✅ **Windows**: Instruções validadas e testadas na máquina do desenvolvedor
-- ⚠️ **Linux e macOS**: Instruções baseadas em documentação e assistência de IA (GPT-5). **Não foram testadas em ambiente real**. Se encontrar problemas, por favor reporte ou ajuste conforme sua distribuição/versão do sistema operacional.
+**Installation Validation:**
+- ✅ **Windows**: Instructions validated and tested on the developer's machine
+- ⚠️ **Linux and macOS**: Instructions based on documentation and AI assistance (GPT-5). **Not tested in a real environment**. If you encounter issues, please report or adjust according to your distribution/operating system version.
 
-Para instruções detalhadas de instalação em **Windows, Linux ou macOS**, consulte o [INSTALLATION.md](INSTALLATION.md).
+For detailed installation instructions on **Windows, Linux or macOS**, see [INSTALLATION.md](INSTALLATION.md).
 
-**Instalação rápida:**
+**Quick installation:**
 
 ```bash
-# Criar ambiente virtual
+# Create virtual environment
 python -m venv venv
 
-# Ativar ambiente virtual
+# Activate virtual environment
 # Windows: .\venv\Scripts\Activate.ps1
 # Linux/Mac: source venv/bin/activate
 
-# Instalar dependências Python
+# Install Python dependencies
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 
-# Instalar dependências Node.js (para interface web)
+# Install Node.js dependencies (for web interface)
 cd frontend
 npm install
 cd ..
 ```
 
-**Requisitos:**
-- Python >= 3.10 (recomendado: 3.11+)
-- Node.js >= 18 (apenas para interface web)
-- pip e npm
+**Requirements:**
+- Python >= 3.10 (recommended: 3.11+)
+- Node.js >= 18 (only for web interface)
+- pip and npm
 
-### Uso Básico
+### Basic Usage
 
 ```bash
-# Processar PDFs de uma pasta
+# Process PDFs from a folder
 python scripts/batch_extract.py --input data/samples --output results.json
 ```
 
 
-## Como Utilizar a Solução
+## How to Use the Solution
 
-A solução oferece duas formas de uso: **versão terminal** (CLI) e **versão web** (API + Interface).
+The solution offers two ways to use: **terminal version** (CLI) and **web version** (API + Interface).
 
-### Versão Terminal (CLI)
+### Terminal Version (CLI)
 
-A versão terminal permite processar múltiplos PDFs de uma pasta e gerar um JSON de resposta oficial.
+The terminal version allows processing multiple PDFs from a folder and generating an official response JSON.
 
-#### Pré-requisitos
+#### Prerequisites
 
 ```bash
-# Instalar dependências
+# Install dependencies
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 ```
 
-#### Uso Básico
+#### Basic Usage
 
 ```bash
-# Processar todos os PDFs da pasta samples
+# Process all PDFs from the samples folder
 python scripts/batch_extract.py --input data/samples --output results.json
 ```
 
-#### Opções Avançadas
+#### Advanced Options
 
 ```bash
-# Processar apenas PDFs com label específico
+# Process only PDFs with specific label
 python scripts/batch_extract.py --input data/samples --output results.json --label carteira_oab
 
-# Modo silencioso (sem prints de progresso)
+# Silent mode (no progress prints)
 python scripts/batch_extract.py --input data/samples --output results.json --quiet
 
-# Processar pasta customizada
-python scripts/batch_extract.py --input /caminho/para/pdfs --output /caminho/para/saida.json
+# Process custom folder
+python scripts/batch_extract.py --input /path/to/pdfs --output /path/to/output.json
 ```
 
 
 
-### Versão Web (API + Interface)
+### Web Version (API + Interface)
 
-A versão web oferece uma interface gráfica e uma API REST para extração de dados.
+The web version offers a graphical interface and a REST API for data extraction.
 
-#### Iniciar o Backend (API)
+#### Start Backend (API)
 
 ```bash
-# No diretório raiz do projeto
+# In the project root directory
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
-# ou
+# or
 python -m backend.src.main
 ```
 
-A API estará disponível em `http://localhost:8000`
+The API will be available at `http://localhost:8000`
 
-**Nota para Windows:** Você pode usar o script `start-ui.bat` (duplo clique) ou `.\start-ui.ps1` no PowerShell para iniciar automaticamente o backend e frontend. Veja [START_UI.md](START_UI.md) para mais detalhes.
+**Note for Windows:** You can use the `start-ui.bat` script (double-click) or `.\start-ui.ps1` in PowerShell to automatically start the backend and frontend. See [START_UI.md](START_UI.md) for more details.
 
 
-#### Iniciar o Frontend (Interface Web)
+#### Start Frontend (Web Interface)
 
 ```bash
-# No diretório frontend
+# In the frontend directory
 cd frontend
 npm install
 npm run dev
 ```
 
-A interface estará disponível em `http://localhost:3000`
+The interface will be available at `http://localhost:3000`
 
-#### Uso da Interface Web
+#### Web Interface Usage
 
-1. Acesse `http://localhost:3000` no navegador
-2. Preencha o **Label** do documento (ex: `carteira_oab`)
-3. Defina o **Schema** de extração (JSON com descrições dos campos)
-4. Selecione um ou mais arquivos PDF
-5. Clique em **Extrair** para processar
-6. Visualize os resultados na interface
+1. Access `http://localhost:3000` in your browser
+2. Fill in the document **Label** (e.g., `carteira_oab`)
+3. Define the extraction **Schema** (JSON with field descriptions)
+4. Select one or more PDF files
+5. Click **Extract** to process
+6. View results in the interface
 
-#### Exemplo de Schema para Interface
+#### Schema Example for Interface
 
 ```json
 {
@@ -197,170 +197,170 @@ A interface estará disponível em `http://localhost:3000`
 }
 ```
 
-## Uso via Script CLI
+## CLI Script Usage
 
-O script `batch_extract.py` permite processar múltiplos PDFs de uma pasta:
+The `batch_extract.py` script allows processing multiple PDFs from a folder:
 
 ```bash
-# Processar todos os PDFs da pasta samples
+# Process all PDFs from the samples folder
 python scripts/batch_extract.py --input data/samples --output results.json
 
-# Processar apenas PDFs com label específico
+# Process only PDFs with specific label
 python scripts/batch_extract.py --input data/samples --output results.json --label carteira_oab
 
-# Modo silencioso
+# Silent mode
 python scripts/batch_extract.py --input data/samples --output results.json --quiet
 ```
 
-### Opções do Script
+### Script Options
 
-- `--input, -i`: Caminho da pasta contendo os PDFs (e opcionalmente dataset.json)
-- `--output, -o`: Caminho do arquivo JSON de saída
-- `--label, -l`: Filtrar apenas PDFs com este label (opcional)
-- `--quiet, -q`: Modo silencioso (não imprime progresso)
+- `--input, -i`: Path to folder containing PDFs (and optionally dataset.json)
+- `--output, -o`: Path to output JSON file
+- `--label, -l`: Filter only PDFs with this label (optional)
+- `--quiet, -q`: Silent mode (does not print progress)
 
-## Configuração
+## Configuration
 
-### Secrets (para LLM/OpenAI embeddings)
+### Secrets (for LLM/OpenAI embeddings)
 
 ```bash
-# Copiar template de secrets
+# Copy secrets template
 cp configs/secrets.yaml.example configs/secrets.yaml
-# Editar e adicionar sua OPENAI_API_KEY
+# Edit and add your OPENAI_API_KEY
 # Windows: notepad configs/secrets.yaml
 # Linux/Mac: nano configs/secrets.yaml
 ```
 
-**Importante:** O arquivo `secrets.yaml` é git-ignored. Use o template `secrets.yaml.example` como base.
+**Important:** The `secrets.yaml` file is git-ignored. Use the `secrets.yaml.example` template as a base.
 
 
-## Tipos de Campos e Validadores
+## Field Types and Validators
 
-O sistema suporta 20+ tipos de campos com validação e normalização automática:
+The system supports 20+ field types with automatic validation and normalization:
 
-### Tipos Básicos
-- `text`: Texto simples ou multi-linha
-- `text_multiline`: Texto multi-linha (endereços, descrições)
-- `id_simple`: ID alfanumérico (≥3 caracteres, requer ≥1 dígito)
-- `date`: Normalizado para `YYYY-MM-DD`
-- `money`: Formato brasileiro normalizado para decimal (ex: `76871.20`)
-- `percent`: Normalizado para decimal (ex: `12.5`)
-- `int`: Número inteiro
-- `float`: Número decimal
-- `enum`: Enumeração com validação de opções
+### Basic Types
+- `text`: Simple or multi-line text
+- `text_multiline`: Multi-line text (addresses, descriptions)
+- `id_simple`: Alphanumeric ID (≥3 characters, requires ≥1 digit)
+- `date`: Normalized to `YYYY-MM-DD`
+- `money`: Brazilian format normalized to decimal (e.g., `76871.20`)
+- `percent`: Normalized to decimal (e.g., `12.5`)
+- `int`: Integer number
+- `float`: Decimal number
+- `enum`: Enumeration with option validation
 
-### Tipos Brasileiros
-- `uf`: Código de estado (2 letras maiúsculas: PR, SP, etc.)
-- `cep`: CEP brasileiro (8 dígitos)
-- `cpf`: CPF brasileiro com validação
-- `cnpj`: CNPJ brasileiro com validação
-- `phone_br`: Telefone normalizado para E.164
-- `placa_mercosul`: Placa de veículo (formato Mercosul ou antigo)
-- `cnh`: Número de CNH
-- `pis_pasep`: Número PIS/PASEP
-- `chave_nf`: Chave de nota fiscal (44 dígitos)
-- `rg`: Número de RG
-- `email`: Endereço de email
-- `alphanum_code`: Código alfanumérico genérico
+### Brazilian Types
+- `uf`: State code (2 uppercase letters: PR, SP, etc.)
+- `cep`: Brazilian CEP (8 digits)
+- `cpf`: Brazilian CPF with validation
+- `cnpj`: Brazilian CNPJ with validation
+- `phone_br`: Phone normalized to E.164
+- `placa_mercosul`: Vehicle plate (Mercosul or old format)
+- `cnh`: CNH number
+- `pis_pasep`: PIS/PASEP number
+- `chave_nf`: Invoice key (44 digits)
+- `rg`: RG number
+- `email`: Email address
+- `alphanum_code`: Generic alphanumeric code
 
-## Hints (Padrões Tipográficos)
+## Hints (Typographic Patterns)
 
-O sistema utiliza hints para extrair padrões tipográficos e semânticos dos campos. As hints identificam características como:
-- Tamanho de fonte
-- Estilo (negrito, itálico)
-- Cor do texto
-- Padrões de formatação (datas, valores monetários, telefones, etc.)
+The system uses hints to extract typographic and semantic patterns from fields. Hints identify characteristics such as:
+- Font size
+- Style (bold, italic)
+- Text color
+- Formatting patterns (dates, monetary values, phones, etc.)
 
-As hints são implementadas através de classes especializadas (DateHint, MoneyHint, PhoneHint, etc.) que detectam padrões específicos nos dados extraídos.
+Hints are implemented through specialized classes (DateHint, MoneyHint, PhoneHint, etc.) that detect specific patterns in extracted data.
 
-## Aprendizado Incremental
+## Incremental Learning
 
-O sistema implementa um mecanismo de aprendizado incremental que melhora a precisão da extração ao longo do tempo, aprendendo com documentos processados anteriormente.
+The system implements an incremental learning mechanism that improves extraction accuracy over time, learning from previously processed documents.
 
-### Como Funciona
+### How It Works
 
-O sistema de aprendizado coleta informações de cada extração realizada e armazena padrões aprendidos para cada tipo de documento (`label`) e campo:
+The learning system collects information from each extraction performed and stores learned patterns for each document type (`label`) and field:
 
-1. **Coleta de Dados**: Para cada campo extraído, o sistema registra:
-   - **Posição espacial** (coordenadas X, Y) onde o campo foi encontrado
-   - **Role do token** (LABEL, VALUE, HEADER, etc.)
-   - **Tipo de dado** inferido (data, dinheiro, texto, etc.)
-   - **Estratégia de matching** utilizada (pattern, regex, embedding, etc.)
-   - **Número de conexões** do token no grafo
-   - **Sucesso da extração** (se o campo foi encontrado ou não)
+1. **Data Collection**: For each extracted field, the system records:
+   - **Spatial position** (X, Y coordinates) where the field was found
+   - **Token role** (LABEL, VALUE, HEADER, etc.)
+   - **Inferred data type** (date, money, text, etc.)
+   - **Matching strategy** used (pattern, regex, embedding, etc.)
+   - **Number of connections** of the token in the graph
+   - **Extraction success** (whether the field was found or not)
 
-2. **Análise de Padrões**: Com base nas ocorrências coletadas, o sistema calcula:
-   - **Posição média e desvio padrão** de cada campo
-   - **Distribuição de roles** mais comuns
-   - **Distribuição de tipos de dado** mais frequentes
-   - **Taxa de sucesso** (quantas vezes o campo foi encontrado)
-   - **Rigidez do padrão** (quão consistente é a localização do campo)
+2. **Pattern Analysis**: Based on collected occurrences, the system calculates:
+   - **Mean position and standard deviation** of each field
+   - **Role distribution** most common
+   - **Data type distribution** most frequent
+   - **Success rate** (how many times the field was found)
+   - **Pattern rigidity** (how consistent the field location is)
 
-3. **Aplicação do Aprendizado**: Durante extrações subsequentes, o sistema:
-   - **Rejeita matches inconsistentes**: Se um candidato está muito longe da posição esperada, tem role ou tipo de dado muito diferentes do padrão aprendido, ou se o campo nunca foi encontrado em documentos anteriores, ele é rejeitado antes de ser considerado como match válido
+3. **Learning Application**: During subsequent extractions, the system:
+   - **Rejects inconsistent matches**: If a candidate is too far from the expected position, has a role or data type very different from the learned pattern, or if the field was never found in previous documents, it is rejected before being considered as a valid match
 
-### Persistência
+### Persistence
 
-O aprendizado é salvo automaticamente após cada extração em:
+Learning is automatically saved after each extraction in:
 ```
 ~/.graph_extractor/learning.json
 ```
-(No Windows: `C:\Users\<seu_usuario>\.graph_extractor\learning.json`)
+(On Windows: `C:\Users\<your_user>\.graph_extractor\learning.json`)
 
-O arquivo é atualizado incrementalmente, permitindo que o conhecimento seja preservado entre execuções do sistema.
+The file is updated incrementally, allowing knowledge to be preserved between system executions.
 
-### Ativação/Desativação
+### Activation/Deactivation
 
-O aprendizado incremental está **ativado por padrão** e pode ser controlado:
+Incremental learning is **enabled by default** and can be controlled:
 
-- **CLI**: Use a flag `--no-learning` para desabilitar
+- **CLI**: Use the `--no-learning` flag to disable
   ```bash
   python scripts/batch_extract.py --input data/samples --output results.json --no-learning
   ```
 
-- **API/UI**: O parâmetro `use_learning` pode ser passado na requisição (padrão: `true`)
+- **API/UI**: The `use_learning` parameter can be passed in the request (default: `true`)
 
-- **Código**: Passe `use_learning=False` ao inicializar o `GraphSchemaExtractor`
+- **Code**: Pass `use_learning=False` when initializing `GraphSchemaExtractor`
 
-### Benefícios
+### Benefits
 
-- **Melhora contínua**: A precisão aumenta conforme mais documentos são processados
-- **Adaptação a layouts específicos**: O sistema aprende onde cada campo costuma aparecer em documentos do mesmo tipo
-- **Redução de falsos positivos**: Rejeita candidatos que não seguem padrões estabelecidos (requer pelo menos 3 ocorrências para padrões positivos)
-- **Transparente**: Funciona automaticamente sem necessidade de configuração adicional
+- **Continuous improvement**: Accuracy increases as more documents are processed
+- **Adaptation to specific layouts**: The system learns where each field usually appears in documents of the same type
+- **Reduction of false positives**: Rejects candidates that don't follow established patterns (requires at least 3 occurrences for positive patterns)
+- **Transparent**: Works automatically without need for additional configuration
 
-### Limitações
+### Limitations
 
-- Requer múltiplas extrações do mesmo tipo de documento para ser efetivo (mínimo de 3 ocorrências para rejeitar matches positivos)
-- Padrões aprendidos são específicos por `label` (tipo de documento)
-- Pode rejeitar matches válidos se o layout mudar significativamente
-- O sistema apenas rejeita matches inconsistentes; não há sistema de priorização/boost para matches que seguem padrões
+- Requires multiple extractions of the same document type to be effective (minimum of 3 occurrences to reject positive matches)
+- Learned patterns are specific per `label` (document type)
+- May reject valid matches if layout changes significantly
+- The system only rejects inconsistent matches; there is no prioritization/boost system for matches that follow patterns
 
 
-## Limitações e Trade-offs
+## Limitations and Trade-offs
 
-### O que Funciona Bem
+### What Works Well
 
-- **Layouts estruturados**: Documentos com labels e valores claros (IDs, certificados, formulários)
-- **Tabelas**: Tabelas KV (chave-valor) e grid com estrutura visível
-- **Posicionamento consistente**: Campos que aparecem em locais previsíveis
-- **Labels claros**: Labels que correspondem ou são semanticamente similares às descrições do schema
-- **PDFs baseados em texto**: PDFs com texto extraível (não scans puros de imagem)
+- **Structured layouts**: Documents with clear labels and values (IDs, certificates, forms)
+- **Tables**: KV (key-value) and grid tables with visible structure
+- **Consistent positioning**: Fields that appear in predictable locations
+- **Clear labels**: Labels that correspond or are semantically similar to schema descriptions
+- **Text-based PDFs**: PDFs with extractable text (not pure image scans)
 
-### Casos Difíceis
+### Difficult Cases
 
-- **Layouts altamente complexos**: Documentos com elementos sobrepostos, estruturas de colunas incomuns
-- **Qualidade de OCR ruim**: PDFs com extração de texto de baixa qualidade ou erros de OCR
-- **Labels ambíguos**: Quando múltiplos campos podem corresponder ao mesmo label
-- **Documentos muito grandes**: Tempo de processamento aumenta linearmente com o número de páginas
+- **Highly complex layouts**: Documents with overlapping elements, unusual column structures
+- **Poor OCR quality**: PDFs with low-quality text extraction or OCR errors
+- **Ambiguous labels**: When multiple fields can correspond to the same label
+- **Very large documents**: Processing time increases linearly with number of pages
 
 ### Trade-offs
 
-- **Performance vs. Precisão**: Análise mais profunda (embeddings, LLM) aumenta precisão mas custa tempo/dinheiro
-- **Determinismo vs. AI**: Heurísticas determinísticas são rápidas e gratuitas, mas LLM pode lidar com casos extremos
-- **Memória vs. Velocidade**: Memória de padrões melhora precisão ao longo do tempo mas requer armazenamento
-- **Multi-página vs. Página única**: Processamento multi-página é mais robusto mas mais lento
+- **Performance vs. Accuracy**: Deeper analysis (embeddings, LLM) increases accuracy but costs time/money
+- **Determinism vs. AI**: Deterministic heuristics are fast and free, but LLM can handle extreme cases
+- **Memory vs. Speed**: Pattern memory improves accuracy over time but requires storage
+- **Multi-page vs. Single page**: Multi-page processing is more robust but slower
 
-## Licença
+## License
 
-Este projeto faz parte do desafio take-home do Enter AI Fellowship. (Alexandre Bastos)
+This project is part of the Enter AI Fellowship take-home challenge. (Alexandre Bastos)

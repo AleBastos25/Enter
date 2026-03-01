@@ -20,13 +20,13 @@ export function SchemaPopup({ isOpen, onClose, onUse }: SchemaPopupProps) {
     try {
       const parsed = JSON.parse(jsonText);
       if (typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Schema deve ser um objeto JSON");
+        throw new Error("Schema must be a JSON object");
       }
       // Validar que todos os valores são strings
       const schema: Record<string, string> = {};
       for (const [key, value] of Object.entries(parsed)) {
         if (typeof value !== "string") {
-          throw new Error(`Valor de "${key}" deve ser uma string`);
+          throw new Error(`Value of "${key}" must be a string`);
         }
         schema[key] = value;
       }
@@ -35,14 +35,14 @@ export function SchemaPopup({ isOpen, onClose, onUse }: SchemaPopupProps) {
       setJsonText("");
       onClose();
     } catch (err: any) {
-      setError(err.message || "JSON inválido");
+      setError(err.message || "Invalid JSON");
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
       <div className="bg-[#171717] border border-[#404040] rounded-lg p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <h2 className="text-xl font-bold mb-4 text-white">Escrever Schema JSON</h2>
+        <h2 className="text-xl font-bold mb-4 text-white">Write Schema JSON</h2>
         <textarea
           value={jsonText}
           onChange={(e) => {
@@ -60,13 +60,13 @@ export function SchemaPopup({ isOpen, onClose, onUse }: SchemaPopupProps) {
             onClick={onClose}
             className="px-4 py-2 bg-[#2a2a2a] hover:bg-[#404040] text-white rounded-lg transition-colors"
           >
-            Cancelar
+            Cancel
           </button>
           <button
             onClick={handleUse}
             className="px-4 py-2 bg-[#FF6B00] hover:bg-[#FF7A00] text-white rounded-lg transition-colors"
           >
-            Usar
+            Use
           </button>
         </div>
       </div>

@@ -1,22 +1,22 @@
 # Backend - Graph Extractor API
 
-API FastAPI para extração de dados de PDFs usando Graph Extractor.
+FastAPI for extracting data from PDFs using Graph Extractor.
 
-## Instalação
+## Installation
 
 ```bash
-# No diretório raiz do projeto
+# In the project root directory
 pip install -r requirements.txt
 pip install -r backend/requirements.txt
 ```
 
-## Execução
+## Execution
 
 ```bash
-# Desenvolvimento
+# Development
 uvicorn backend.src.main:app --reload --host 0.0.0.0 --port 8000
 
-# Ou usando o script Python diretamente
+# Or using Python script directly
 python -m backend.src.main
 ```
 
@@ -24,16 +24,16 @@ python -m backend.src.main
 
 ### POST /api/graph-extract
 
-Extrai dados de múltiplos PDFs.
+Extracts data from multiple PDFs.
 
 **Form Data:**
-- `label` (string): Label do documento
-- `schema` (string, opcional): JSON string com schema
-- `schema_file` (file, opcional): Arquivo JSON com schema
-- `files` (files): Lista de PDFs (até 10)
-- `dev_mode` (bool): Se True, gera HTML do grafo
+- `label` (string): Document label
+- `schema` (string, optional): JSON string with schema
+- `schema_file` (file, optional): JSON file with schema
+- `files` (files): List of PDFs (up to 10)
+- `dev_mode` (bool): If True, generates graph HTML
 
-**Resposta:**
+**Response:**
 ```json
 {
   "runs": [
@@ -54,23 +54,22 @@ Extrai dados de múltiplos PDFs.
 
 ### GET /graph/{run_id}.html
 
-Retorna HTML do grafo para uma execução (apenas em dev_mode).
+Returns graph HTML for an execution (only in dev_mode).
 
-## Configuração
+## Configuration
 
-### Secrets (para LLM/OpenAI embeddings)
+### Secrets (for LLM/OpenAI embeddings)
 
 ```bash
-# Copiar template de secrets
+# Copy secrets template
 cp configs/secrets.yaml.example configs/secrets.yaml
-# Editar e adicionar sua OPENAI_API_KEY
+# Edit and add your OPENAI_API_KEY
 # Windows: notepad configs/secrets.yaml
 # Linux/Mac: nano configs/secrets.yaml
 ```
 
-**Importante:** O arquivo `secrets.yaml` é git-ignored. Use o template `secrets.yaml.example` como base.
+**Important:** The `secrets.yaml` file is git-ignored. Use the `secrets.yaml.example` template as a base.
 
-### Variáveis de Ambiente (Frontend)
+### Environment Variables (Frontend)
 
-O frontend usa a variável `NEXT_PUBLIC_API_URL` (padrão: `http://localhost:8000`). Configure em `.env.local` no diretório `frontend/` se necessário.
-
+The frontend uses the `NEXT_PUBLIC_API_URL` variable (default: `http://localhost:8000`). Configure in `.env.local` in the `frontend/` directory if needed.

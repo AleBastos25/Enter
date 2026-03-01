@@ -3,9 +3,15 @@
 import sys
 from pathlib import Path
 
-# FORÇAR FLUSH IMEDIATO
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+# FORÇAR FLUSH IMEDIATO E UTF-8
+try:
+    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+except (AttributeError, ValueError):
+    # Fallback para versões antigas do Python ou se reconfigure não estiver disponível
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True)
 
 print("=" * 80, flush=True)
 print("[MAIN] Iniciando aplicacao FastAPI...", flush=True)
@@ -93,8 +99,8 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     # Log ANTES de qualquer coisa
     print("=" * 80, flush=True)
-    print(f"[MIDDLEWARE] →→→ REQUISIÇÃO RECEBIDA ←←←", flush=True)
-    print(f"[MIDDLEWARE] Método: {request.method}", flush=True)
+    print(f"[MIDDLEWARE] >>> REQUISICAO RECEBIDA <<<", flush=True)
+    print(f"[MIDDLEWARE] Metodo: {request.method}", flush=True)
     print(f"[MIDDLEWARE] URL: {request.url}", flush=True)
     print(f"[MIDDLEWARE] Path: {request.url.path}", flush=True)
     print(f"[MIDDLEWARE] Headers: {dict(request.headers)}", flush=True)
@@ -104,7 +110,7 @@ async def log_requests(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
-        print(f"[MIDDLEWARE] ← {response.status_code} {request.url} ({process_time:.2f}s)", flush=True)
+        print(f"[MIDDLEWARE] <- {response.status_code} {request.url} ({process_time:.2f}s)", flush=True)
         sys.stdout.flush()
         return response
     except Exception as e:

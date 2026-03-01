@@ -1,69 +1,68 @@
-# Como Iniciar a UI
+# How to Start the UI
 
-## Método 1: Duplo clique (mais fácil)
+## Method 1: Double-click (easiest)
 
-1. Clique duas vezes no arquivo `start-ui.bat`
-2. O script irá iniciar automaticamente o backend e frontend
+1. Double-click the `start-ui.bat` file
+2. The script will automatically start the backend and frontend
 
-## Método 2: PowerShell
+## Method 2: PowerShell
 
-1. Abra o PowerShell na raiz do projeto
-2. Execute:
+1. Open PowerShell in the project root
+2. Run:
    ```powershell
    .\start-ui.ps1
    ```
 
-## O que o script faz:
+## What the script does:
 
-1. ✅ Encontra e configura o Node.js
-2. ✅ Verifica se o backend está rodando (porta 8000)
-3. ✅ Inicia o backend em uma nova janela (se necessário)
-4. ✅ Verifica se o frontend está rodando (porta 3000)
-5. ✅ Instala dependências do frontend (se necessário)
-6. ✅ Inicia o frontend
-7. ✅ Abre o navegador automaticamente em http://localhost:3000
+1. ✅ Finds and configures Node.js
+2. ✅ Checks if backend is running (port 8000)
+3. ✅ Starts backend in a new window (if needed)
+4. ✅ Checks if frontend is running (port 3000)
+5. ✅ Installs frontend dependencies (if needed)
+6. ✅ Starts frontend
+7. ✅ Automatically opens browser at http://localhost:3000
 
-## Requisitos:
+## Requirements:
 
-- Python 3.10+ instalado
-- Node.js instalado (o script procura em locais comuns)
-- Ambiente virtual Python criado (`.venv`) - opcional
+- Python 3.10+ installed
+- Node.js installed (script searches in common locations)
+- Python virtual environment created (`.venv`) - optional
 
-## Problemas comuns:
+## Common problems:
 
-### Erro de política de execução
+### Execution policy error
 
-Se aparecer erro sobre política de execução, execute no PowerShell:
+If you get an error about execution policy, run in PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### Backend não inicia
+### Backend doesn't start
 
-Verifique se a porta 8000 está livre:
+Check if port 8000 is free:
 
 ```powershell
 netstat -ano | findstr :8000
 ```
 
-### Frontend não inicia
+### Frontend doesn't start
 
-Verifique se a porta 3000 está livre:
+Check if port 3000 is free:
 
 ```powershell
 netstat -ano | findstr :3000
 ```
 
-## Parar a aplicação:
+## Stop the application:
 
-- **Frontend**: Pressione `Ctrl+C` no terminal do frontend
-- **Backend**: Feche a janela do PowerShell do backend ou pressione `Ctrl+C`
+- **Frontend**: Press `Ctrl+C` in the frontend terminal
+- **Backend**: Close the PowerShell window of the backend or press `Ctrl+C`
 
 ## URLs:
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
-- Docs da API: http://localhost:8000/docs
-
+- API Docs: http://localhost:8000/docs
 

@@ -1,37 +1,37 @@
-# Setup do Frontend - Graph Extractor UI
+# Frontend Setup - Graph Extractor UI
 
-##  Aviso 
+## Warning
 
-**Validação de Instalação:**
-- ✅ **Windows**: Instruções validadas e testadas na máquina do desenvolvedor
-- ⚠️ **Linux e macOS**: Instruções baseadas em documentação e assistência de IA (GPT-5). **Não foram testadas em ambiente real**. Se encontrar problemas, por favor reporte ou ajuste conforme sua distribuição/versão do sistema operacional.
+**Installation Validation:**
+- ✅ **Windows**: Instructions validated and tested on the developer's machine
+- ⚠️ **Linux and macOS**: Instructions based on documentation and AI assistance (GPT-5). **Not tested in a real environment**. If you encounter issues, please report or adjust according to your distribution/operating system version.
 
-## ⚠️ Node.js Necessário
+## ⚠️ Node.js Required
 
-O frontend requer **Node.js 18+** e **npm** (vem junto com Node.js).
+The frontend requires **Node.js 18+** and **npm** (comes with Node.js).
 
-## Instalação do Node.js
+## Node.js Installation
 
 ### Windows
 
-1. **Baixe o Node.js LTS**:
-   - Acesse: https://nodejs.org/
-   - Baixe a versão LTS (recomendada)
-   - Execute o instalador `.msi`
+1. **Download Node.js LTS**:
+   - Visit: https://nodejs.org/
+   - Download the LTS (recommended) version
+   - Run the `.msi` installer
 
-2. **Durante a instalação**:
-   - ✅ Marque "Add to PATH"
-   - ✅ Marque "Automatically install necessary tools"
+2. **During installation**:
+   - ✅ Check "Add to PATH"
+   - ✅ Check "Automatically install necessary tools"
 
-3. **Reinicie o PowerShell/Terminal**
+3. **Restart PowerShell/Terminal**
 
-4. **Verifique a instalação**:
+4. **Verify installation**:
    ```powershell
    node --version
    npm --version
    ```
 
-**Alternativas:**
+**Alternatives:**
 
 - **Chocolatey:**
   ```powershell
@@ -45,37 +45,37 @@ O frontend requer **Node.js 18+** e **npm** (vem junto com Node.js).
 
 ### Linux (Ubuntu/Debian)
 
-**Opção A: NodeSource (Recomendado)**
+**Option A: NodeSource (Recommended)**
 
 ```bash
-# Instalar Node.js 20.x LTS
+# Install Node.js 20.x LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Opção B: nvm (Node Version Manager)**
+**Option B: nvm (Node Version Manager)**
 
 ```bash
-# Instalar nvm
+# Install nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# Recarregar shell
+# Reload shell
 source ~/.bashrc
 
-# Instalar Node.js LTS
+# Install Node.js LTS
 nvm install --lts
 nvm use --lts
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Opção C: Snap**
+**Option C: Snap**
 
 ```bash
 sudo snap install node --classic
@@ -83,44 +83,44 @@ sudo snap install node --classic
 
 ### macOS
 
-**Opção A: Homebrew (Recomendado)**
+**Option A: Homebrew (Recommended)**
 
 ```bash
-# Instalar Node.js LTS via Homebrew
+# Install Node.js LTS via Homebrew
 brew install node@20
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Opção B: nvm**
+**Option B: nvm**
 
 ```bash
-# Instalar nvm
+# Install nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# Recarregar shell
+# Reload shell
 source ~/.zshrc
 
-# Instalar Node.js LTS
+# Install Node.js LTS
 nvm install --lts
 nvm use --lts
 
-# Verificar
+# Verify
 node --version
 npm --version
 ```
 
-**Opção C: Instalador Oficial**
+**Option C: Official Installer**
 
-1. Baixe de https://nodejs.org/
-2. Execute o instalador `.pkg`
-3. Siga as instruções do instalador
+1. Download from https://nodejs.org/
+2. Run the `.pkg` installer
+3. Follow the installer instructions
 
-## Instalação das Dependências
+## Dependency Installation
 
-Após instalar o Node.js:
+After installing Node.js:
 
 **Windows:**
 ```powershell
@@ -134,7 +134,7 @@ cd frontend
 npm install
 ```
 
-Isso irá instalar:
+This will install:
 - Next.js
 - React
 - TypeScript
@@ -142,67 +142,67 @@ Isso irá instalar:
 - Axios
 - JSZip
 
-## Execução
+## Execution
 
 **Windows:**
 ```powershell
-# Desenvolvimento
+# Development
 npm run dev
 
-# Build de produção
+# Production build
 npm run build
 
-# Executar produção
+# Run production
 npm start
 ```
 
 **Linux/Mac:**
 ```bash
-# Desenvolvimento
+# Development
 npm run dev
 
-# Build de produção
+# Production build
 npm run build
 
-# Executar produção
+# Run production
 npm start
 ```
 
-## Configuração
+## Configuration
 
-Crie um arquivo `.env.local` (opcional):
+Create a `.env.local` file (optional):
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Se o backend estiver em outra porta, ajuste conforme necessário.
+If the backend is on another port, adjust as needed.
 
-## Problemas Comuns
+## Common Problems
 
-### "npm não é reconhecido"
+### "npm is not recognized"
 
-- Node.js não está instalado
-- Node.js não está no PATH
-- Reinicie o terminal após instalar
+- Node.js is not installed
+- Node.js is not in PATH
+- Restart terminal after installing
 
-### Erro de módulos não encontrados
+### Module not found error
 
 **Windows:**
 ```powershell
-# Limpar cache e reinstalar
+# Clear cache and reinstall
 Remove-Item -Recurse -Force node_modules, package-lock.json
 npm install
 ```
 
 **Linux/Mac:**
 ```bash
-# Limpar cache e reinstalar
+# Clear cache and reinstall
 rm -rf node_modules package-lock.json
 npm install
 ```
 
-### Porta 3000 ocupada
+### Port 3000 occupied
 
 **Windows:**
 ```powershell
@@ -214,10 +214,9 @@ npm run dev -- -p 3001
 npm run dev -- -p 3001
 ```
 
-### Problemas de permissão (Linux/Mac)
+### Permission problems (Linux/Mac)
 
 ```bash
-# Ajustar permissões do npm
+# Adjust npm permissions
 sudo chown -R $USER:$USER ~/.npm
 ```
-

@@ -7,7 +7,7 @@ from typing import List, Optional
 
 # Importar debug helper
 try:
-    from ...utils.debug import debug_print, error_print, set_debug_mode
+    from utils.debug import debug_print, error_print, set_debug_mode
 except ImportError:
     # Fallback se não conseguir importar
     def debug_print(*args, **kwargs):
@@ -44,7 +44,7 @@ if str(backend_src) not in sys.path:
 debug_print("[EXTRACTION_ROUTES] Tentando importar extractor_service...")
 
 try:
-    from ...services.extractor_service import extractor_service
+    from services.extractor_service import extractor_service
     debug_print("[EXTRACTION_ROUTES] extractor_service importado com sucesso")
 except Exception as e:
     error_print(f"[EXTRACTION_ROUTES] ERRO ao importar extractor_service: {e}")
@@ -53,7 +53,7 @@ except Exception as e:
     raise
 
 try:
-    from ...services.graph_generator import graph_generator
+    from services.graph_generator import graph_generator
     debug_print("[EXTRACTION_ROUTES] graph_generator importado com sucesso")
 except Exception as e:
     error_print(f"[EXTRACTION_ROUTES] ERRO ao importar graph_generator: {e}")
@@ -62,7 +62,7 @@ except Exception as e:
     raise
 
 try:
-    from ...utils.file_handler import save_uploaded_files, cleanup_temp_dir
+    from utils.file_handler import save_uploaded_files, cleanup_temp_dir
     debug_print("[EXTRACTION_ROUTES] file_handler importado com sucesso")
 except Exception as e:
     error_print(f"[EXTRACTION_ROUTES] ERRO ao importar file_handler: {e}")
@@ -71,7 +71,7 @@ except Exception as e:
     raise
 
 try:
-    from ..models import RunResult, ExtractionResponse
+    from api.models import RunResult, ExtractionResponse
     debug_print("[EXTRACTION_ROUTES] models importado com sucesso")
 except Exception as e:
     error_print(f"[EXTRACTION_ROUTES] ERRO ao importar models: {e}")

@@ -1,6 +1,8 @@
 # Document Extraction System
 
-Hybrid layout-first pipeline for extracting structured data from PDFs. Extracts structured information from arbitrary PDF documents using a combination of spatial analysis, table detection, semantic matching and optional LLM fallback.
+This project was developed as part of the take-home assignment for the selection process of the Enter AI Fellowship. It is a hybrid, layout-first pipeline for PDF classification and structured data extraction from arbitrary PDF documents, combining spatial analysis, table detection, semantic matching, and an optional LLM fallback. The original assignment is available in the repository as [Enter AI Fellowship – Take Home Project PDF](./Enter%20AI%20Fellowship__Take%20Home%20Project.pdf).
+
+![Project screenshot](./screenshots_grid_2x2_16x9.png)
 
 ## Mapped Challenges and Proposed Solutions
 
